@@ -32,10 +32,31 @@ let currentId = null;
 let transcriptSeq = 0;
 let currentRecordId = null;
 let pendingPlayForId = null;
+let pendingStartAt = 0;
 
 // auto-scroll state
 let autoScrollReq = null, autoScrollStart = 0, autoScrollFrom = 0, autoScrollTo = 0, autoScrollDur = 0;
 function cancelAutoScroll(){ if (autoScrollReq) { cancelAnimationFrame(autoScrollReq); autoScrollReq = null; } }
+
+function computeLateStart(val){
+  const norm = String(val || '').trim();
+  if (!norm) return 0;
+  if (/^(1|true|yes)$/i.test(norm)) return 4;
+  const num = Number(norm);
+  return Number.isFinite(num) && num > 0 ? num : 0;
+}
+
+function startOffsetForIndex(idx){
+  if (!FILTERED || idx < 0 || idx >= FILTERED.length) return 0;
+  return computeLateStart(FILTERED[idx]?.['Late_4s']);
+}
+
+function videoLoadOptions(id, startAt = 0){
+  const idNum = Number(id);
+  const opts = { id: Number.isFinite(idNum) ? idNum : id };
+  if (startAt > 0) opts.start = startAt;
+  return opts;
+}
 
 /* ---------------------------
    Vimeo SDK loader
@@ -228,11 +249,12 @@ async function ensurePlayer(initId) {
       const next = nextPlayableIdFromFiltered(currentIndex);
       if (next && next.id) {
         currentIndex = next.index; currentId = String(next.id);
+        pendingStartAt = startOffsetForIndex(currentIndex);
         await setTranscriptFor(currentId);
         applyAudioUi(currentId);
         try {
           pendingPlayForId = currentId;
-          await player.loadVideo(currentId);
+          await player.loadVideo(videoLoadOptions(currentId, pendingStartAt));
         } catch (e) {
           console.warn('Autoplay-next failed:', e);
         }
@@ -250,7 +272,7 @@ async function ensurePlayer(initId) {
 /* ---------------------------
    Public API
 ---------------------------- */
-export async function openPlayer(id) {
+export async function openPlayer(id, opts = {}) {
   if (!id) return;
   closeTranscriptModal?.();
 
@@ -259,6 +281,12 @@ export async function openPlayer(id) {
 
   currentIndex = indexOfIdInFiltered(cleanId);
   currentId    = cleanId;
+
+  const requestedStart = opts?.startAt;
+  const numericRequested = requestedStart === undefined ? NaN : Number(requestedStart);
+  const fallbackStart = startOffsetForIndex(currentIndex);
+  const effectiveStart = Number.isFinite(numericRequested) ? numericRequested : fallbackStart;
+  pendingStartAt = Number.isFinite(effectiveStart) && effectiveStart >= 0 ? effectiveStart : 0;
 
   // 1) Update transcript immediately in the MODAL
   await setTranscriptFor(cleanId);
@@ -277,7 +305,7 @@ export async function openPlayer(id) {
   try {
     const p = await ensurePlayer(cleanId);
     pendingPlayForId = cleanId;
-    await p.loadVideo(cleanId);
+    await p.loadVideo(videoLoadOptions(cleanId, pendingStartAt));
   } catch (e) {
     console.warn('Could not start playback:', e);
     modal?.classList.remove('open');
@@ -289,6 +317,7 @@ function close() {
   modal?.classList.remove('open');
   setAutoplaySessionActive(false);
   cancelAutoScroll();
+  pendingStartAt = 0;
   document.body.classList.remove('audio-mode');
   if (player) player.unload().catch(()=>{});
   else if (iframe) iframe.src = '';
@@ -297,8 +326,8 @@ function close() {
 export function bindPlayer() {
   // Open on row click
   document.addEventListener('row:play', (e) => {
-    const { id } = e.detail || {};
-    if (id) openPlayer(id);
+    const { id, startAt } = e.detail || {};
+    if (id) openPlayer(id, { startAt });
   });
 
   // Close controls

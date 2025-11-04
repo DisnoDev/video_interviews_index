@@ -39,9 +39,19 @@ export function renderTable(rows){
     const link=row['Link']||'';
     const title=row['Title']||'';
     const transcript=row['Transcript']||'';
+    const lateRaw=(row['Late_4s']||'').trim();
+    let startAt = 0;
+    if (lateRaw) {
+      if (/^(1|true|yes)$/i.test(lateRaw)) startAt = 4;
+      else {
+        const lateNum = Number(lateRaw);
+        if (Number.isFinite(lateNum) && lateNum > 0) startAt = lateNum;
+      }
+    }
     const vid = extractVimeoId(link);
     tr.dataset.id = vid; // ✅ store video id on the row
     tr.dataset.link = link;   // <-- add this so we can read the hash later
+    tr.dataset.startAt = String(startAt);
 
     tr.innerHTML = `
       <td class="col-year">${escapeHtml(year)}</td>
@@ -52,7 +62,7 @@ export function renderTable(rows){
   <td class="col-transcript">${renderTranscriptCell(transcript, notion, person)}</td>
   <td class="col-keywords">${renderKeywords(keywords)}</td>    
   <td class="col-hidden">${escapeHtml(title)}</td>
-  <td class="col-play"><button class="playBtn" data-id="${vid}" data-title="${escapeAttr(title||notion)}" title="Play">▶</button></td>
+  <td class="col-play"><button class="playBtn" data-id="${vid}" data-start-at="${startAt}" data-title="${escapeAttr(title||notion)}" title="Play">▶</button></td>
 `;
 
 
@@ -158,7 +168,8 @@ export function bindRowInteractions() {
     // 2) Explicit play button
     const pb = e.target.closest('.playBtn');
     if (pb) {
-      document.dispatchEvent(new CustomEvent('row:play', { detail: { id: pb.dataset.id } }));
+      const startAt = Number(pb.dataset.startAt || 0);
+      document.dispatchEvent(new CustomEvent('row:play', { detail: { id: pb.dataset.id, startAt } }));
       return;
     }
 
@@ -168,8 +179,9 @@ export function bindRowInteractions() {
     if (e.target.closest('a,button,.kbtn,.tbtn')) return;
 
     const id = tr.dataset.id;
+    const startAt = Number(tr.dataset.startAt || 0);
     if (id) {
-      document.dispatchEvent(new CustomEvent('row:play', { detail: { id } }));
+      document.dispatchEvent(new CustomEvent('row:play', { detail: { id, startAt } }));
     }
   });
 
