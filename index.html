@@ -15,7 +15,7 @@
   data-show-transcript="0"
   data-show-duration="0"
   data-show-year="0"
-  data-show-collection="0"
+  data-show-collection="1"
   data-show-play="0"
 >
 
@@ -39,25 +39,29 @@
           <span class="toggle2" data-i18n="showLabel">Show: </span>
           <!--<span class="toggle" data-col="year">Year</span>
           <span class="toggle" data-col="duration">Duration </span>-->
-          <span class="toggle" data-col="collection" data-i18n="toggleCollection">Collection</span>
           <span class="toggle" data-col="transcript" data-i18n="toggleTranscript">Transcript </span>
           <span class="toggle" data-col="keywords" data-i18n="toggleKeywords">Keywords</span>
           <span class="toggle" id="exportPdfBtn" aria-pressed="false">&#x21F2; PDF</span>
 
-    
+
         </div>
         <div class="right">
           <input id="search" type="search" placeholder="Search… (concept, person, keywords, …)" data-i18n-placeholder="searchPlaceholder" />
+          <select id="collectionFilter" class="pill">
+            <option value="">All</option>
+            <option value="Post Growth Toolkit">Post Growth Toolkit</option>
+            <option value="Radical Ecological Shifts">Radical Ecological Shifts</option>
+          </select>
           <!-- <span id="count" class="pill">0 items</span>
           <span class="toggle" id="toggleAutoplay" aria-pressed="false">Autoplay</span> -->
           <select id="langPref" class="pill">
-  <option value="" data-i18n="langAuto">&#128483; auto</option>
-  <option value="en">English</option>
-  <option value="fr">Français</option>
-  <option value="de">Deutsch</option>
-  <option value="pl">Polski</option>
-</select>
-<span class="toggle" id="toggleAudioMode" aria-pressed="false" title="Audio-only mode" data-i18n="toggleAudioMode" data-i18n-title="audioOnlyMode">&#x1F4FB; mode</span>
+            <option value="" data-i18n="langAuto">&#128483; auto</option>
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="pl">Polski</option>
+          </select>
+          <span class="toggle" id="toggleAudioMode" aria-pressed="false" title="Audio-only mode" data-i18n="toggleAudioMode" data-i18n-title="audioOnlyMode">&#x1F4FB; mode</span>
           <button id="themeToggle" class="pill">☾ / ☼</button>
           
 

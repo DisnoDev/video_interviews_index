@@ -1,5 +1,6 @@
 // assets/js/toolbar.js
 import { $, $$ } from './utils.js';
+import { setCollectionFilter, getCollectionFilter, getCollectionOptions } from './table.js';
 
 // --- state -------------------------------------------------
 let autoplayEnabled = false;       // user toggle (session)
@@ -8,6 +9,13 @@ let autoplaySessionActive = false; // set true while modal is open / playing
 // Persistent + per-session flags
 let audioMode = (localStorage.getItem('pg_audio_mode') === '1'); // persistent user pref
 let audioClickedThisSession = (sessionStorage.getItem('pg_audio_clicked') === '1'); // new guard
+
+let collectionSelect = null;
+const collectionAliasMap = new Map();
+const collectionSlugOverrides = new Map([
+  ['Post Growth Toolkit', 'PGTK'],
+  ['Radical Ecological Shifts', 'RES']
+]);
 
 // --- small helpers / exports -------------------------------
 export function isAudioMode() { return audioMode; }
@@ -105,6 +113,135 @@ export function bindToolbar() {
         detail: { lang: val || null }
       }));
     });
+  }
+
+  collectionSelect = $('#collectionFilter');
+  if (collectionSelect) {
+    collectionSelect.addEventListener('change', (e) => {
+      const val = (e.target.value || '').trim();
+      setCollectionFilter(val);
+      syncCollectionQueryParam(val);
+    });
+  }
+}
+
+export function refreshCollectionFilterOptions() {
+  collectionSelect = collectionSelect || $('#collectionFilter');
+  if (!collectionSelect) return;
+
+  const options = getCollectionOptions();
+  const fragment = document.createDocumentFragment();
+
+  const defaultOption = document.createElement('option');
+  defaultOption.value = '';
+  defaultOption.textContent = 'All';
+  fragment.appendChild(defaultOption);
+
+  options.forEach(label => {
+    const opt = document.createElement('option');
+    opt.value = label;
+    opt.textContent = label;
+    fragment.appendChild(opt);
+  });
+
+  collectionSelect.innerHTML = '';
+  collectionSelect.appendChild(fragment);
+
+  const current = getCollectionFilter();
+  if (current && options.includes(current)) {
+    collectionSelect.value = current;
+  } else {
+    collectionSelect.value = '';
+    if (current) {
+      setCollectionFilter('');
+      syncCollectionQueryParam('');
+    }
+  }
+
+  rebuildCollectionAliasMap(options);
+}
+
+export function applyCollectionFilterFromUrl() {
+  collectionSelect = collectionSelect || $('#collectionFilter');
+  if (!collectionSelect) return false;
+
+  const token = readCollectionTokenFromUrl();
+  if (!token) return false;
+
+  const resolved = resolveCollectionLabelFromToken(token);
+  if (resolved === null) return false;
+
+  setCollectionFilter(resolved);
+  if (collectionSelect.value !== resolved) {
+    collectionSelect.value = resolved;
+  }
+  syncCollectionQueryParam(resolved);
+  return true;
+}
+
+function rebuildCollectionAliasMap(options) {
+  collectionAliasMap.clear();
+
+  const normalized = new Map();
+  options.forEach(label => {
+    const key = normalizeCollectionToken(label);
+    if (!key || normalized.has(key)) return;
+    normalized.set(key, label);
+    collectionAliasMap.set(key, label);
+    const slugKey = normalizeCollectionToken(label.replace(/[^A-Za-z0-9]/g, ''));
+    if (slugKey && !collectionAliasMap.has(slugKey)) collectionAliasMap.set(slugKey, label);
+  });
+
+  const pgKey = normalizeCollectionToken('Post Growth Toolkit');
+  if (normalized.has(pgKey)) {
+    collectionAliasMap.set('pgtk', normalized.get(pgKey));
+  }
+
+  const resKey = normalizeCollectionToken('Radical Ecological Shifts');
+  if (normalized.has(resKey)) {
+    collectionAliasMap.set('res', normalized.get(resKey));
+  }
+}
+
+function normalizeCollectionToken(str) {
+  return (str || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function readCollectionTokenFromUrl() {
+  const search = window.location.search || '';
+  if (!search || search === '?') return '';
+  const query = search.slice(1);
+  if (!query) return '';
+  const first = query.split('&')[0];
+  if (!first) return '';
+  const [rawKey, rawValue = ''] = first.split('=');
+  const raw = rawValue || rawKey;
+  return decodeURIComponent(raw || '').trim();
+}
+
+function resolveCollectionLabelFromToken(token) {
+  const norm = normalizeCollectionToken(token);
+  if (!norm || norm === 'all') return '';
+  return collectionAliasMap.get(norm) ?? null;
+}
+
+function syncCollectionQueryParam(label) {
+  const hash = window.location.hash || '';
+  if (!label) {
+    try {
+      window.history.replaceState({}, '', `${window.location.pathname}${hash}`);
+    } catch (_) {
+      window.location.search = '';
+    }
+    return;
+  }
+
+  const slug = collectionSlugOverrides.get(label) || label.replace(/[^A-Za-z0-9]/g, '');
+  const query = slug ? `?${slug}` : '';
+  try {
+    window.history.replaceState({}, '', `${window.location.pathname}${query}${hash}`);
+  } catch (_) {
+    window.location.search = query;
   }
 }
 

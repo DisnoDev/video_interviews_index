@@ -4,6 +4,9 @@ export let DATA = [];
 export let FILTERED = [];
 export let sortKey, sortDir;
 
+let collectionFilter = '';
+let collectionFilterKey = '';
+
 export function setSort(initialKey, initialDir){
   sortKey = initialKey; sortDir = initialDir;
   const th = $(`#videoTable thead th[data-key="${CSS.escape(sortKey)}"]`);
@@ -24,6 +27,28 @@ export function bindSorting(){
 
 export function rerenderCurrent() {
   renderTable(FILTERED);
+}
+
+export function setCollectionFilter(value) {
+  collectionFilter = (value || '').trim();
+  collectionFilterKey = normalizeCollectionToken(collectionFilter);
+  applyFilters();
+}
+
+export function getCollectionFilter() {
+  return collectionFilter;
+}
+
+export function getCollectionOptions() {
+  const seen = new Map();
+  DATA.forEach(row => {
+    const label = (row['Collection'] || '').trim();
+    if (!label) return;
+    const key = normalizeCollectionToken(label);
+    if (!key || seen.has(key)) return;
+    seen.set(key, label);
+  });
+  return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
 }
 
 export function renderTable(rows){
@@ -74,6 +99,10 @@ tbody.appendChild(tr);
   });
   const countEl = $('#count');
   if (countEl) countEl.textContent = `${rows.length} items`;
+}
+
+function normalizeCollectionToken(str) {
+  return (str || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
 function renderKeywords(str){
@@ -133,8 +162,13 @@ function hideHover(){ hoverCard.style.display='none'; }
 
 export function applyFilters(){
   const q = ($('#search').value || '').trim().toLowerCase();
+  const hasQuery = !!q;
   FILTERED = DATA.filter(r=>{
-    if(!q) return true;
+    if (collectionFilterKey) {
+      const rowKey = normalizeCollectionToken(r['Collection'] || '');
+      if (rowKey !== collectionFilterKey) return false;
+    }
+    if (!hasQuery) return true;
     const hay=[r['Notion'], r['Interviewee name'], r['Title'], r['Keywords'], r['Collection'], r['Year']].join(' ').toLowerCase();
     return hay.includes(q);
   });
