@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DISNOVATION.ORG — Video Index</title>
+  <link rel="stylesheet" href="assets/css/styles.css" />
+<!--    <link rel="stylesheet" href="assets/css/pgit_alt.css" />
+    <link rel="stylesheet" href="/PGTK/cyberfem.css">
+  -->
+
+</head>
+<body
+  data-show-keywords="0"
+  data-show-transcript="0"
+  data-show-duration="0"
+  data-show-year="0"
+  data-show-collection="0"
+  data-show-play="0"
+>
+
+
+<div id="aoOverlay" class="ao-overlay"></div>
+<div class="gradient"></div>
+<div class="gradient"></div>
+<div class="gradient"></div>
+<div class="gradient"></div>
+  <div class="wrap">
+    <header>
+      <h1><a target="_blank" href="https://disnovation.org">DISNOVATION.ORG</a> | Video Interviews Index</h1>
+
+    </header>
+       <p>Spanning energy, ecology, economics, and techno-solutionism, most DISNOVATION.ORG projects begin with dialogue and documentation alongside experts and stakeholders. This archive gathers the interviews that underpin works such as the Post Growth Toolkit, ShadowGrowth, and Radical Ecological Shifts.</p>
+
+    <!-- Sticky Column toggle toolbar -->
+    <div class="tbar-wrap" id="tbarWrap">
+      <div class="tbar" role="toolbar" aria-label="Column visibility">
+        <div class="left">
+          <span class="toggle2">Show: </span>
+          <!--<span class="toggle" data-col="year">Year</span>
+          <span class="toggle" data-col="duration">Duration </span>-->
+          <span class="toggle" data-col="collection">Collection</span>
+          <span class="toggle" data-col="transcript">Transcript </span>
+          <span class="toggle" data-col="keywords">Keywords</span>
+          <span class="toggle" id="exportPdfBtn" aria-pressed="false">&#x21F2; PDF</span>
+
+    
+        </div>
+        <div class="right">
+          <input id="search" type="search" placeholder="Search… (concept, person, keywords, …)" />
+          <!-- <span id="count" class="pill">0 items</span>
+          <span class="toggle" id="toggleAutoplay" aria-pressed="false">Autoplay</span> -->
+          <select id="langPref" class="pill">
+  <option value="">&#128483; auto</option>
+  <option value="en">English</option>
+  <option value="fr">Français</option>
+  <option value="de">Deutsch</option>
+  <option value="pl">Polski</option>
+</select>
+<span class="toggle" id="toggleAudioMode" aria-pressed="false" title="Audio-only mode">&#x1F4FB; mode</span>
+          <button id="themeToggle" class="pill">☾ / ☼</button>
+          
+
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="videoTable">
+        <thead>
+          <tr>
+                   <th class="sortable col-year" data-key="Year">&nbsp; &#x1F4C5;</th>
+                        <th class="sortable col-duration" data-key="Duration (s)">&nbsp; &#128337;</th>
+               <th class="sortable col-collection" data-key="Collection">Collection</th>
+            <th class="sortable" data-key="Notion">Concept</th>
+            <th class="sortable" data-key="Interviewee name">Author</th>
+            <th class="sortable col-transcript" data-key="Transcript">&#x1F4C3;</th>
+            <th class="sortable col-keywords" data-key="Keywords">Keywords</th>
+       
+     
+         
+            <th class="col-hidden sortable" data-key="Title">Title</th>
+            <th class="col-play">Play</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <p class="hint"><br>
+      DISNOVATION.ORG ART COLLECTIVE - OCT. 2025<br/><br/>
+    </p>
+  </div>
+
+  <!-- Hover preview -->
+  <div id="hoverCard" class="hover-card" aria-hidden="true">
+    <img id="hoverImg" alt="Preview" />
+    <div id="hoverMeta" class="meta"></div>
+  </div>
+
+<!-- Video modal -->
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-label="Video player">
+  <button class="close" id="closeModal">Close ✕</button>
+  <button class="fs" id="fsModal">Fullscreen ⛶</button>
+
+  <div class="player-wrapper">
+    <div class="player">
+      <iframe id="player" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+    </div>
+
+    <!-- keep this one -->
+    <div id="audioScreen" class="audio-screen">
+      <div class="audio-inner">
+        <h3 id="audioTitle"></h3>
+        <div id="audioTranscript" class="audio-txt"></div>
+        <div class="audio-controls">
+          <label>Auto-scroll <input id="audioAutoScroll" type="checkbox" checked /></label>
+          <label>Speed <input id="audioSpeed" type="range" min="0.5" max="2.0" step="0.1" value="1" />
+                 <span id="audioSpeedVal">1.0×</span></label>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+  <!-- Transcript modal -->
+  <div id="tmodal" class="modal tmodal" role="dialog" aria-modal="true" aria-label="Transcript panel">
+    <button class="close" id="tclose">Close ✕</button>
+    <div class="content">
+      <div class="actions">
+        <button id="tdownloadPdf" class="toggle">Download .pdf</button>
+        <button id="tdownload" class="toggle">Download .txt</button>
+      </div>
+      <h2 id="tTitle">Transcript</h2>
+      <div id="tBody" class="transcript"><em style="color:var(--muted)">No transcript available.</em></div>
+    </div>
+  </div>
+
+
+  <script type="module" src="app.js"></script>
+  <!-- ES modules 
+
+  <script type="module" src="js/ui-helpers.js"></script>
+  <script src="/PGTK/cyberfem.js"></script>
+<script src="/PGTK/cyberfem-adapter.js"></script>
+-->
+
+
+</body>
+</html>
