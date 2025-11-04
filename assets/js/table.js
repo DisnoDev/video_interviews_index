@@ -47,7 +47,7 @@ export function renderTable(rows){
       <td class="col-year">${escapeHtml(year)}</td>
       <td class="col-duration">${escapeHtml(dur)}</td>
  <td class="col-collection">${escapeHtml(coll)}</td>
-  <td>${notionLabel(row)}</td>
+  <td>${notionLabel(row, notion)}</td>
   <td>${escapeHtml(person)}</td>
   <td class="col-transcript">${renderTranscriptCell(transcript, notion, person)}</td>
   <td class="col-keywords">${renderKeywords(keywords)}</td>    
@@ -84,22 +84,59 @@ function renderTranscriptCell(val, notion, person){
 }
 
 
+function getLocalizedValue(row, baseKey, lang) {
+  if (!row || !baseKey) return '';
+  const normalizedLang = String(lang || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  if (!normalizedLang) return '';
+
+  const normalizedBase = String(baseKey)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  const normalizedTarget = normalizedBase + normalizedLang;
+
+  let fallback = '';
+
+  for (const key of Object.keys(row)) {
+    const raw = row[key];
+    if (raw === undefined || raw === null) continue;
+
+    const normalizedKey = String(key)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+    if (!normalizedKey || normalizedKey === normalizedBase) continue;
+
+    const trimmed = String(raw).trim();
+    if (!trimmed) continue;
+
+    if (normalizedKey === normalizedTarget) {
+      return trimmed;
+    }
+
+    if (!fallback && normalizedKey.startsWith(normalizedBase) && normalizedKey.endsWith(normalizedLang)) {
+      fallback = trimmed;
+    }
+  }
+
+  return fallback;
+}
+
 function preferredNotion(row) {
   const pref = (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
-  if (pref) {
-    const key = `Notion_${pref}`;
-    if (row[key] && row[key].trim()) return row[key].trim();
-  }
+  const localized = getLocalizedValue(row, 'Notion', pref);
+  if (localized) return localized;
   // fallback to original
   return (row['Notion'] || '').trim();
 }
 
-function notionLabel(row) {
+function notionLabel(row, notionValue) {
   const orig = (row['Notion'] || '').trim();
   const pref = (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
-  const key = pref ? `Notion_${pref}` : '';
-  const txt = preferredNotion(row);
-  const translated = key && row[key] && row[key].trim() && row[key].trim() !== orig;
+  const localized = getLocalizedValue(row, 'Notion', pref);
+  const txt = notionValue || localized || orig;
+  const translated = !!localized && localized !== orig;
   return translated
     ? `${txt} <span class="xlate-hint" title="Auto-translated">•</span>`
     : txt;
