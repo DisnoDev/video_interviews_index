@@ -138,8 +138,10 @@ th, td { padding: 0 0; border-spacing: 0; border-bottom:1px dashed var(--line); 
 .table-container { display:flex; justify-content:flex-start; }
 
 /* =========================
-   Video modal (CLEAN STACK)
+   Modal shells
    ========================= */
+/* `.modal` is shared by the video modal (#modal) and transcript modal (#tmodal).
+   ID selectors below only tweak the video modal without affecting transcript styling. */
 .modal{
   position:fixed; inset:0; background:rgba(0,0,0,.7);
   display:none; align-items:center; justify-content:center; z-index:100;
@@ -152,8 +154,13 @@ th, td { padding: 0 0; border-spacing: 0; border-bottom:1px dashed var(--line); 
 }
 .modal .close{ right:20px; } .modal .fs{ left:20px; }
 
-/* stack modal content vertically & center */
-##modal.open { display:flex; flex-direction:column; align-items:center; gap:16px; }
+/* Base modal layout shared by the video (#modal) and transcript (#tmodal) dialogs */
+.modal.open {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:16px;
+}
 
 /* shared width */
 #modal .player-wrapper, #modal #audioScreen { width:min(92vw,960px); max-width:100%; }
@@ -240,20 +247,11 @@ p { letter-spacing: 0.3px; }
 }
 /* ====== PGTK HOTFIX (authoritative modal + player) ====== */
 
-/* Modal visibility: hidden by default, visible only when .open */
+/* Modal visibility: hidden by default, visible only when .open.
+   Keep the !important guard because legacy styles elsewhere force #modal visible,
+   and pair it with an explicit .open override so the video modal can reappear. */
 #modal { display: none !important; }
-.modal.open {
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-}
-
-/* When open, stack vertically (video on top, transcript below) */
-#modal.open {
-  flex-direction: column;
-  gap: 16px;
-  align-items: center;
-}
+#modal.open { display: flex !important; }
 
 /* Video box (container owns 16:9); iframe fills it */
 #modal .player {
@@ -305,23 +303,4 @@ body.audio-mode #modal #audioScreen {
 
 /* Safety: the hover preview must not intercept scroll/clicks on modal */
 #modal #hoverCard { pointer-events: none !important; }
-
-
-/* modal visibility */
-#modal { display: none !important; }
-.modal.open { display: flex !important; align-items: center; justify-content: center; }
-#modal.open { flex-direction: column; gap: 16px; }
-
-/* 16:9 container + iframe fills it */
-#modal .player { position: relative; width: min(92vw, 960px); aspect-ratio: 16/9;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin: 0 auto; }
-#modal .player iframe#player { position: absolute; inset: 0; width: 100%; height: 100%; display: block; border: 0; border-radius: inherit; }
-
-/* transcript as normal block below video */
-#modal #audioScreen { position: relative; width: min(92vw,960px); margin: 16px auto 0; padding: 16px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-sizing: border-box; max-height: 48vh; overflow: auto; }
-
-/* audio-only still works */
-body.audio-mode #modal .player { display: none; }
-body.audio-mode #modal #audioScreen { max-height: none; height: calc(100dvh - 140px); }
 
