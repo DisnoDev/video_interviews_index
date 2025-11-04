@@ -250,9 +250,11 @@ p { letter-spacing: 0.3px; }
 
 /* When open, stack vertically (video on top, transcript below) */
 #modal.open {
+  display: flex !important;
   flex-direction: column;
   gap: 16px;
   align-items: center;
+  justify-content: center;
 }
 
 /* Video box (container owns 16:9); iframe fills it */
@@ -310,7 +312,7 @@ body.audio-mode #modal #audioScreen {
 /* modal visibility */
 #modal { display: none !important; }
 .modal.open { display: flex !important; align-items: center; justify-content: center; }
-#modal.open { flex-direction: column; gap: 16px; }
+#modal.open { display: flex !important; flex-direction: column; gap: 16px; align-items: center; justify-content: center; }
 
 /* 16:9 container + iframe fills it */
 #modal .player { position: relative; width: min(92vw, 960px); aspect-ratio: 16/9;
