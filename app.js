@@ -12,6 +12,7 @@ import { bindPlayer } from './assets/js/player.js';
 import { bindTranscript } from './assets/js/transcript.js';
 import { bindToolbar } from './assets/js/toolbar.js';
 import { bindPdfExport } from './assets/js/pdf.js';
+import { initI18n } from './assets/js/i18n.js';
 import { DEFAULT_SORT_KEY, DEFAULT_SORT_DIR } from './assets/js/config.js';
 
 
@@ -25,6 +26,7 @@ async function init(){
     bindPlayer();
     bindTranscript();
     bindPdfExport();
+    initI18n();
     setSort(DEFAULT_SORT_KEY, DEFAULT_SORT_DIR);
 
     // 🔄 Re-render Concept column on language change

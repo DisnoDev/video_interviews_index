@@ -27,37 +27,37 @@
 <div class="gradient"></div>
   <div class="wrap">
     <header>
-      <h1><a target="_blank" href="https://disnovation.org">DISNOVATION.ORG</a> | Video Interviews Index</h1>
+      <h1><a target="_blank" href="https://disnovation.org">DISNOVATION.ORG</a> | <span data-i18n="headerTitle">Video Interviews Index</span></h1>
 
     </header>
-       <p>Spanning energy, ecology, economics, and techno-solutionism, most DISNOVATION.ORG projects begin with dialogue and documentation alongside experts and stakeholders. This archive gathers the interviews that underpin works such as the Post Growth Toolkit, ShadowGrowth, and Radical Ecological Shifts.</p>
+       <p data-i18n="intro">Spanning energy, ecology, economics, and techno-solutionism, most DISNOVATION.ORG projects begin with dialogue and documentation alongside experts and stakeholders. This archive gathers the interviews that underpin works such as the Post Growth Toolkit, ShadowGrowth, and Radical Ecological Shifts.</p>
 
     <!-- Sticky Column toggle toolbar -->
     <div class="tbar-wrap" id="tbarWrap">
       <div class="tbar" role="toolbar" aria-label="Column visibility">
         <div class="left">
-          <span class="toggle2">Show: </span>
+          <span class="toggle2" data-i18n="showLabel">Show: </span>
           <!--<span class="toggle" data-col="year">Year</span>
           <span class="toggle" data-col="duration">Duration </span>-->
-          <span class="toggle" data-col="collection">Collection</span>
-          <span class="toggle" data-col="transcript">Transcript </span>
-          <span class="toggle" data-col="keywords">Keywords</span>
+          <span class="toggle" data-col="collection" data-i18n="toggleCollection">Collection</span>
+          <span class="toggle" data-col="transcript" data-i18n="toggleTranscript">Transcript </span>
+          <span class="toggle" data-col="keywords" data-i18n="toggleKeywords">Keywords</span>
           <span class="toggle" id="exportPdfBtn" aria-pressed="false">&#x21F2; PDF</span>
 
     
         </div>
         <div class="right">
-          <input id="search" type="search" placeholder="Search… (concept, person, keywords, …)" />
+          <input id="search" type="search" placeholder="Search… (concept, person, keywords, …)" data-i18n-placeholder="searchPlaceholder" />
           <!-- <span id="count" class="pill">0 items</span>
           <span class="toggle" id="toggleAutoplay" aria-pressed="false">Autoplay</span> -->
           <select id="langPref" class="pill">
-  <option value="">&#128483; auto</option>
+  <option value="" data-i18n="langAuto">&#128483; auto</option>
   <option value="en">English</option>
   <option value="fr">Français</option>
   <option value="de">Deutsch</option>
   <option value="pl">Polski</option>
 </select>
-<span class="toggle" id="toggleAudioMode" aria-pressed="false" title="Audio-only mode">&#x1F4FB; mode</span>
+<span class="toggle" id="toggleAudioMode" aria-pressed="false" title="Audio-only mode" data-i18n="toggleAudioMode" data-i18n-title="audioOnlyMode">&#x1F4FB; mode</span>
           <button id="themeToggle" class="pill">☾ / ☼</button>
           
 
@@ -71,16 +71,16 @@
           <tr>
                    <th class="sortable col-year" data-key="Year">&nbsp; &#x1F4C5;</th>
                         <th class="sortable col-duration" data-key="Duration (s)">&nbsp; &#128337;</th>
-               <th class="sortable col-collection" data-key="Collection">Collection</th>
-            <th class="sortable" data-key="Notion">Concept</th>
-            <th class="sortable" data-key="Interviewee name">Author</th>
-            <th class="sortable col-transcript" data-key="Transcript">&#x1F4C3;</th>
-            <th class="sortable col-keywords" data-key="Keywords">Keywords</th>
+               <th class="sortable col-collection" data-key="Collection" data-i18n="thCollection">Collection</th>
+            <th class="sortable" data-key="Notion" data-i18n="thConcept">Concept</th>
+            <th class="sortable" data-key="Interviewee name" data-i18n="thAuthor">Author</th>
+            <th class="sortable col-transcript" data-key="Transcript" data-i18n="thTranscript">&#x1F4C3;</th>
+            <th class="sortable col-keywords" data-key="Keywords" data-i18n="thKeywords">Keywords</th>
        
      
          
-            <th class="col-hidden sortable" data-key="Title">Title</th>
-            <th class="col-play">Play</th>
+            <th class="col-hidden sortable" data-key="Title" data-i18n="thTitle">Title</th>
+            <th class="col-play" data-i18n="thPlay">Play</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -100,8 +100,8 @@
 
 <!-- Video modal -->
 <div id="modal" class="modal" role="dialog" aria-modal="true" aria-label="Video player">
-  <button class="close" id="closeModal">Close ✕</button>
-  <button class="fs" id="fsModal">Fullscreen ⛶</button>
+  <button class="close" id="closeModal" data-i18n="modalClose">Close ✕</button>
+  <button class="fs" id="fsModal" data-i18n="modalFullscreen">Fullscreen ⛶</button>
 
   <div class="player-wrapper">
     <div class="player">
@@ -114,8 +114,8 @@
         <h3 id="audioTitle"></h3>
         <div id="audioTranscript" class="audio-txt"></div>
         <div class="audio-controls">
-          <label>Auto-scroll <input id="audioAutoScroll" type="checkbox" checked /></label>
-          <label>Speed <input id="audioSpeed" type="range" min="0.5" max="2.0" step="0.1" value="1" />
+          <label><span data-i18n="audioAutoScroll">Auto-scroll</span> <input id="audioAutoScroll" type="checkbox" checked /></label>
+          <label><span data-i18n="audioSpeed">Speed</span> <input id="audioSpeed" type="range" min="0.5" max="2.0" step="0.1" value="1" />
                  <span id="audioSpeedVal">1.0×</span></label>
         </div>
       </div>
@@ -126,14 +126,14 @@
 
   <!-- Transcript modal -->
   <div id="tmodal" class="modal tmodal" role="dialog" aria-modal="true" aria-label="Transcript panel">
-    <button class="close" id="tclose">Close ✕</button>
+    <button class="close" id="tclose" data-i18n="modalClose">Close ✕</button>
     <div class="content">
       <div class="actions">
-        <button id="tdownloadPdf" class="toggle">Download .pdf</button>
-        <button id="tdownload" class="toggle">Download .txt</button>
+        <button id="tdownloadPdf" class="toggle" data-i18n="downloadPdf">Download .pdf</button>
+        <button id="tdownload" class="toggle" data-i18n="downloadTxt">Download .txt</button>
       </div>
-      <h2 id="tTitle">Transcript</h2>
-      <div id="tBody" class="transcript"><em style="color:var(--muted)">No transcript available.</em></div>
+      <h2 id="tTitle" data-i18n="transcriptTitle">Transcript</h2>
+      <div id="tBody" class="transcript"><em data-i18n="noTranscript" style="color:var(--muted)">No transcript available.</em></div>
     </div>
   </div>
 
