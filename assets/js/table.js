@@ -1,4 +1,5 @@
 import { $, $$, escapeHtml, escapeAttr, durationFmt, extractVimeoId, vimeoThumbUrl, cmp } from './utils.js';
+import { getTranscriptForRow, languageLabel, normalizeLanguageCode } from './lang.js';
 
 export let DATA = [];
 export let FILTERED = [];
@@ -6,6 +7,14 @@ export let sortKey, sortDir;
 
 let collectionFilter = '';
 let collectionFilterKey = '';
+
+function getPreferredLanguage() {
+  try {
+    return (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
 
 export function setSort(initialKey, initialDir){
   sortKey = initialKey; sortDir = initialDir;
@@ -53,6 +62,7 @@ export function getCollectionOptions() {
 
 export function renderTable(rows){
   const tbody = $('#videoTable tbody'); tbody.innerHTML = '';
+  const prefLang = getPreferredLanguage();
   rows.forEach(row=>{
     const tr=document.createElement('tr');
     const notion = preferredNotion(row);
@@ -63,7 +73,9 @@ export function renderTable(rows){
     const keywords=row['Keywords']||'';
     const link=row['Link']||'';
     const title=row['Title']||'';
-    const transcript=row['Transcript']||'';
+    const transcriptInfo = getTranscriptForRow(row, prefLang);
+    const transcript = transcriptInfo?.text || '';
+    const transcriptLang = transcriptInfo?.lang || '';
     const lateRaw=(row['Late_4s']||'').trim();
     let startAt = 0;
     if (lateRaw) {
@@ -84,7 +96,7 @@ export function renderTable(rows){
  <td class="col-collection">${escapeHtml(coll)}</td>
   <td>${notionLabel(row)}</td>
   <td>${escapeHtml(person)}</td>
-  <td class="col-transcript">${renderTranscriptCell(transcript, notion, person)}</td>
+  <td class="col-transcript">${renderTranscriptCell(transcript, notion, person, transcriptLang)}</td>
   <td class="col-keywords">${renderKeywords(keywords)}</td>    
   <td class="col-hidden">${escapeHtml(title)}</td>
   <td class="col-play"><button class="playBtn" data-id="${vid}" data-start-at="${startAt}" data-title="${escapeAttr(title||notion)}" title="Play">▶</button></td>
@@ -115,11 +127,18 @@ function renderKeywords(str){
   return `<div class="kw-wrap">${chips}</div>`;
 }
 
-function renderTranscriptCell(val, notion, person){
+function renderTranscriptCell(val, notion, person, langCode){
   if(!val) return '<span style="color:var(--muted)">—</span>';
   const safe=escapeAttr(val);
   if(/^https?:\/\//i.test(val)) return `<a href="${safe}" target="_blank" rel="noopener" title="Open transcript in new tab">Open ↗</a>`;
-  return `<button class="tbtn" data-title="${escapeAttr(notion + (person? ' — ' + person:''))}" data-text="${safe}">&#x21E9; </button>`;
+  const rawLang = (langCode && typeof langCode === 'string') ? String(langCode).toLowerCase() : '';
+  const langNorm = normalizeLanguageCode(rawLang) || rawLang;
+  const langLabel = langNorm && langNorm !== 'default' ? languageLabel(langNorm) : '';
+  const titleBase = notion + (person ? ' — ' + person : '');
+  const title = langLabel ? `${titleBase} (${langLabel})` : titleBase;
+  const langAttr = langNorm ? ` data-lang="${escapeAttr(langNorm)}"` : '';
+  const langLabelAttr = langLabel ? ` data-lang-label="${escapeAttr(langLabel)}"` : '';
+  return `<button class="tbtn" data-title="${escapeAttr(title)}" data-text="${safe}"${langAttr}${langLabelAttr}>&#x21E9;</button>`;
 }
 
 

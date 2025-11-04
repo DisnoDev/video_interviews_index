@@ -3,6 +3,7 @@ import { $, extractVimeoId, escapeHtml } from './utils.js';
 import { indexOfIdInFiltered, nextPlayableIdFromFiltered, FILTERED } from './table.js';
 import { isAutoplayEnabled, isAutoplaySessionActive, setAutoplaySessionActive, isAudioMode } from './toolbar.js';
 import { closeTranscriptModal } from './transcript.js';
+import { getTranscriptForRow, getSubtitleOptionsForRow, languageLabel, normalizeLanguageCode } from './lang.js';
 
 /* ---------------------------
    Modal-scoped element helpers
@@ -15,6 +16,8 @@ const iframe          = q('#player');
 const closeModalBtn   = q('#closeModal');
 const fsModalBtn      = q('#fsModal');
 const ao              = q('#aoOverlay');          // optional overlay for large text display
+const subtitleControls   = q('#subtitleControls');
+const subtitleButtonsWrap = q('#subtitleButtons');
 
 // Transcript UI (scoped to modal)
 const audioScreen     = q('#audioScreen');
@@ -27,6 +30,10 @@ const audioSpeedVal     = q('#audioSpeedVal');
 let player = null;
 let currentIndex = -1;
 let currentId = null;
+let currentSubtitleActive = '';
+const subtitleButtonMap = new Map();
+let currentSubtitleOptions = [];
+let ignoreNextTextTrackChange = false;
 
 // sequence guards
 let transcriptSeq = 0;
@@ -37,6 +44,119 @@ let pendingStartAt = 0;
 // auto-scroll state
 let autoScrollReq = null, autoScrollStart = 0, autoScrollFrom = 0, autoScrollTo = 0, autoScrollDur = 0;
 function cancelAutoScroll(){ if (autoScrollReq) { cancelAnimationFrame(autoScrollReq); autoScrollReq = null; } }
+
+function canonicalLangCode(value){
+  const raw = value ? String(value).toLowerCase() : '';
+  if (!raw) return '';
+  if (raw === 'default') return '';
+  const normalized = normalizeLanguageCode(raw);
+  return normalized || raw;
+}
+
+function getStoredPrefLang(){
+  try {
+    return (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function setActiveSubtitleLanguage(lang){
+  currentSubtitleActive = canonicalLangCode(lang);
+  reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
+}
+
+function reflectSubtitleButtons(activeLang, preferredLang){
+  const active = canonicalLangCode(activeLang);
+  const pref = canonicalLangCode(preferredLang);
+  subtitleButtonMap.forEach((btn, code) => {
+    const codeNorm = canonicalLangCode(code);
+    const isActive = active ? codeNorm === active : !codeNorm && !active;
+    const isPref = pref ? codeNorm === pref : !pref && !codeNorm;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    btn.classList.toggle('is-pref', isPref);
+  });
+  if (subtitleControls) {
+    if (active) subtitleControls.setAttribute('data-active-lang', active);
+    else subtitleControls.removeAttribute('data-active-lang');
+    if (pref) subtitleControls.setAttribute('data-pref-lang', pref);
+    else subtitleControls.removeAttribute('data-pref-lang');
+  }
+}
+
+function setStoredPrefLang(code, opts = {}){
+  const normalized = canonicalLangCode(code);
+  const prev = canonicalLangCode(getStoredPrefLang());
+  if (normalized) {
+    try { localStorage.setItem('pg_pref_lang', normalized); } catch {}
+  } else {
+    try { localStorage.removeItem('pg_pref_lang'); } catch {}
+  }
+  const select = document.getElementById('langPref');
+  if (select && select.value !== (normalized || '')) {
+    select.value = normalized || '';
+  }
+  reflectSubtitleButtons(currentSubtitleActive, normalized);
+  if (normalized !== prev && !opts.silent) {
+    document.dispatchEvent(new CustomEvent('subtitle:pref-changed', {
+      detail: { lang: normalized || null }
+    }));
+  }
+}
+
+function clearSubtitleButtons(){
+  subtitleButtonMap.clear();
+  if (subtitleButtonsWrap) subtitleButtonsWrap.innerHTML = '';
+  currentSubtitleOptions = [];
+  currentSubtitleActive = canonicalLangCode(getStoredPrefLang());
+  if (subtitleControls) {
+    subtitleControls.classList.add('is-hidden');
+    subtitleControls.setAttribute('hidden', '');
+    subtitleControls.removeAttribute('data-active-lang');
+    subtitleControls.removeAttribute('data-pref-lang');
+  }
+}
+
+function addSubtitleButton({ code, label, isAuto = false }){
+  if (!subtitleButtonsWrap) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = `pill subtitle-btn${isAuto ? ' subtitle-btn--auto' : ''}`;
+  const normalized = isAuto ? '' : canonicalLangCode(code);
+  const displayLabel = label || (normalized ? languageLabel(normalized) : 'Auto');
+  btn.textContent = displayLabel || 'Auto';
+  btn.dataset.lang = normalized || '';
+  btn.setAttribute('aria-pressed', 'false');
+  btn.title = isAuto ? 'Automatically select subtitles' : `Switch subtitles to ${displayLabel}`;
+  btn.addEventListener('click', () => {
+    setStoredPrefLang(normalized, { silent: false });
+  });
+  subtitleButtonsWrap.appendChild(btn);
+  subtitleButtonMap.set(normalized || '', btn);
+  return btn;
+}
+
+function updateSubtitleButtonsForRecord(rec){
+  if (!subtitleControls || !subtitleButtonsWrap) return;
+  clearSubtitleButtons();
+  if (!rec) return;
+  const options = getSubtitleOptionsForRow(rec) || [];
+  currentSubtitleOptions = options;
+  if (!options.length) return;
+  subtitleControls.classList.remove('is-hidden');
+  subtitleControls.removeAttribute('hidden');
+  addSubtitleButton({ code: '', label: 'Auto', isAuto: true });
+  options.forEach((opt) => {
+    const normalized = canonicalLangCode(opt?.code) || canonicalLangCode(opt?.label);
+    if (!normalized) return;
+    const label = opt?.label || languageLabel(normalized) || (normalized ? normalized.toUpperCase() : '');
+    const code = normalized || (opt?.code ? String(opt.code).toLowerCase() : '');
+    addSubtitleButton({ code, label });
+  });
+  currentSubtitleActive = canonicalLangCode(getStoredPrefLang()) || currentSubtitleActive || '';
+  reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
+}
 
 function computeLateStart(val){
   const norm = String(val || '').trim();
@@ -76,26 +196,61 @@ function loadVimeoSdk() {
 /* ---------------------------
    Subtitles preference
 ---------------------------- */
+function normalizeTrackLanguage(track){
+  if (!track) return '';
+  return normalizeLanguageCode(track.language || track.lang || track.label || track.code || '');
+}
+
 async function applyPreferredTextTrack(p) {
   try {
-    const pref = (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
+    const pref = getStoredPrefLang();
     for (let attempt = 0; attempt < 5; attempt++) {
       const tracks = await p.getTextTracks();
       if (tracks && tracks.length) {
-        const tryLang = async (lang) => {
-          const hit = tracks.find(t => (t.language || '').toLowerCase().startsWith(lang));
-          if (hit) { await p.enableTextTrack(hit.language, hit.kind || 'subtitles'); return true; }
-          return false;
+        const normalizedTracks = tracks.map((track) => ({
+          raw: track,
+          code: normalizeTrackLanguage(track)
+        }));
+
+        const pickByCode = (code) => {
+          if (!code) return null;
+          const norm = normalizeLanguageCode(code);
+          if (!norm) return null;
+          return normalizedTracks.find((entry) => entry.code === norm) || null;
         };
-        if (pref && await tryLang(pref)) return;
-        if (await tryLang('en')) return;
-        const first = tracks[0];
-        await p.enableTextTrack(first.language, first.kind || 'subtitles');
-        return;
+
+        let choice = pickByCode(pref);
+        if (!choice && pref) {
+          choice = normalizedTracks.find((entry) => {
+            const lang = entry.raw?.language || '';
+            return lang && lang.toLowerCase().startsWith(pref);
+          }) || null;
+        }
+        if (!choice) choice = pickByCode('en');
+        if (!choice) choice = normalizedTracks.find((entry) => entry.code) || null;
+        if (!choice) choice = normalizedTracks[0];
+
+        if (choice && choice.raw) {
+          const langToEnable = choice.raw.language || choice.code || pref || 'en';
+          const kind = choice.raw.kind || 'subtitles';
+          ignoreNextTextTrackChange = true;
+          try {
+            await p.enableTextTrack(langToEnable, kind);
+          } catch (err) {
+            ignoreNextTextTrackChange = false;
+            throw err;
+          }
+          setActiveSubtitleLanguage(choice.code || langToEnable);
+          return choice.code || normalizeLanguageCode(langToEnable) || '';
+        }
       }
       await new Promise(r => setTimeout(r, 200));
     }
-  } catch {}
+  } catch (err) {
+    console.warn('applyPreferredTextTrack failed', err);
+  }
+  setActiveSubtitleLanguage('');
+  return '';
 }
 
 /* ---------------------------
@@ -130,8 +285,11 @@ async function setTranscriptFor(id){
   // Resolve from filtered dataset synchronously
   const idx = indexOfIdInFiltered(String(id));
   const rec = (idx >= 0 && FILTERED) ? FILTERED[idx] : null;
+  updateSubtitleButtonsForRecord(rec);
   const title = rec ? `${rec['Notion']||''}${rec['Interviewee name'] ? ' — ' + rec['Interviewee name'] : ''}` : '';
-  const raw   = rec ? (rec['Transcript'] || '') : '';
+  const transcriptInfo = rec ? getTranscriptForRow(rec, getStoredPrefLang()) : { text: '', lang: null };
+  const raw   = transcriptInfo?.text || '';
+  const transcriptLang = transcriptInfo?.lang || '';
 
   const overlayHtml    = (title ? `<div class="ao-title">${escapeHtml(title)}</div>` : '') +
                          `<div class="ao-text">${formatOverlay(raw)}`;
@@ -142,8 +300,20 @@ async function setTranscriptFor(id){
 
   // Commit to modal elements only
   if (audioTitle)      audioTitle.textContent = title || '';
-  if (audioTranscript) audioTranscript.innerHTML = transcriptHtml;
+  if (audioTranscript) {
+    audioTranscript.innerHTML = transcriptHtml;
+    if (transcriptLang) {
+      audioTranscript.setAttribute('data-lang', canonicalLangCode(transcriptLang));
+    } else {
+      audioTranscript.removeAttribute('data-lang');
+    }
+  }
   if (ao)              ao.innerHTML = overlayHtml;
+  if (subtitleControls) {
+    const normLang = canonicalLangCode(transcriptLang);
+    if (normLang) subtitleControls.setAttribute('data-transcript-lang', normLang);
+    else subtitleControls.removeAttribute('data-transcript-lang');
+  }
 }
 
 /* ---------------------------
@@ -169,9 +339,15 @@ async function prepareAudioScreenForIndex(idx){
   const row = FILTERED?.[idx];
   const notion  = row?.['Notion'] || '';
   const person  = row?.['Interviewee name'] || '';
-  const trans   = row?.['Transcript'] || '';
+  const transcriptInfo = row ? getTranscriptForRow(row, getStoredPrefLang()) : { text: '', lang: null };
+  const trans   = transcriptInfo?.text || '';
   audioTitle.textContent = person ? `${notion} — ${person}` : notion;
   audioTranscript.innerHTML = formatTranscriptToHtml(trans);
+  if (transcriptInfo?.lang) {
+    audioTranscript.setAttribute('data-lang', canonicalLangCode(transcriptInfo.lang));
+  } else {
+    audioTranscript.removeAttribute('data-lang');
+  }
 
   cancelAutoScroll();
   if (audioSpeedEl && audioSpeedVal) audioSpeedVal.textContent = `${Number(audioSpeedEl.value || 1).toFixed(1)}×`;
@@ -242,6 +418,29 @@ async function ensurePlayer(initId) {
 
     player.on('play', () => {
       document.body.classList.toggle('audio-mode', isAudioMode());
+    });
+
+    player.on('texttrackchange', async (data) => {
+      const langRaw = data?.language || data?.track?.language || '';
+      const normalized = canonicalLangCode(langRaw);
+      const activeValue = normalized || (langRaw === '' ? '' : langRaw);
+      setActiveSubtitleLanguage(activeValue);
+
+      if (ignoreNextTextTrackChange) {
+        ignoreNextTextTrackChange = false;
+        reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
+      } else {
+        const stored = canonicalLangCode(getStoredPrefLang());
+        if (normalized !== stored) {
+          ignoreNextTextTrackChange = true;
+          setStoredPrefLang(normalized || '', { silent: false });
+        } else {
+          reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
+        }
+      }
+
+      if (currentId) await setTranscriptFor(currentId);
+      if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
     });
 
     player.on('ended', async () => {
@@ -344,7 +543,10 @@ export function bindPlayer() {
 
   // Subtitle preference change
   document.addEventListener('subtitle:pref-changed', async () => {
-    if (player) applyPreferredTextTrack(player);
+    reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
+    if (player) await applyPreferredTextTrack(player);
+    if (currentId) await setTranscriptFor(currentId);
+    if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
   });
 
   // Audio-mode toggle handling

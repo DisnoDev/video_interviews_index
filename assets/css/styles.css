@@ -265,6 +265,59 @@ p { letter-spacing: 0.3px; }
   margin: 0 auto !important;
   opacity: 1 !important;
 }
+
+#modal .subtitle-controls,
+.subtitle-controls {
+  width: min(92vw, 960px);
+  margin: 12px auto 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.subtitle-controls[hidden] {
+  display: none !important;
+}
+
+.subtitle-label {
+  font-size: 14px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.subtitle-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.subtitle-btn {
+  font-size: 16px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.subtitle-btn--auto {
+  font-style: italic;
+}
+
+.subtitle-btn.active {
+  border-color: var(--bottom);
+  background: color-mix(in oklab, var(--bottom) 20%, transparent);
+  color: var(--ink);
+}
+
+.subtitle-btn.is-pref:not(.active) {
+  border-style: dashed;
+  opacity: 0.85;
+}
 #modal .player iframe#player {
   position: absolute !important;
   inset: 0 !important;
