@@ -35,6 +35,7 @@ export function bindSorting(){
 }
 
 export function rerenderCurrent() {
+  sortRows(FILTERED);
   renderTable(FILTERED);
 }
 
@@ -58,6 +59,28 @@ export function getCollectionOptions() {
     seen.set(key, label);
   });
   return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+}
+
+function getSortValue(row, key) {
+  if (!key) return '';
+  if (key === 'Notion') return preferredNotion(row);
+  return row[key];
+}
+
+function sortRows(rows) {
+  if (!sortKey || !Array.isArray(rows)) return rows;
+  rows.sort((a, b) => {
+    const aVal = getSortValue(a, sortKey);
+    const bVal = getSortValue(b, sortKey);
+    const aNum = Number(aVal);
+    const bNum = Number(bVal);
+    const bothNum = !Number.isNaN(aNum) && !Number.isNaN(bNum);
+    let res = bothNum
+      ? (aNum - bNum)
+      : String(aVal ?? '').localeCompare(String(bVal ?? ''), undefined, { sensitivity: 'base' });
+    return sortDir === 'asc' ? res : -res;
+  });
+  return rows;
 }
 
 export function renderTable(rows){
@@ -194,14 +217,7 @@ export function applyFilters(){
 
 
 
-  FILTERED.sort((a,b)=>{
-    // numeric-friendly for Duration (s) and Year if possible
-    const aVal = a[sortKey]; const bVal = b[sortKey];
-    const aNum = Number(aVal); const bNum = Number(bVal);
-    const bothNum = !isNaN(aNum) && !isNaN(bNum);
-    let res = bothNum ? (aNum - bNum) : String(aVal ?? '').localeCompare(String(bVal ?? ''), undefined, {sensitivity:'base'});
-    return sortDir === 'asc' ? res : -res;
-  });
+  sortRows(FILTERED);
 
   renderTable(FILTERED);
 }
