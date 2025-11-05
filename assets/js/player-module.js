@@ -85,26 +85,6 @@ function reflectSubtitleButtons(activeLang, preferredLang){
   }
 }
 
-function setStoredPrefLang(code, opts = {}){
-  const normalized = canonicalLangCode(code);
-  const prev = canonicalLangCode(getStoredPrefLang());
-  if (normalized) {
-    try { localStorage.setItem('pg_pref_lang', normalized); } catch {}
-  } else {
-    try { localStorage.removeItem('pg_pref_lang'); } catch {}
-  }
-  const select = document.getElementById('langPref');
-  if (select && select.value !== (normalized || '')) {
-    select.value = normalized || '';
-  }
-  reflectSubtitleButtons(currentSubtitleActive, normalized);
-  if (normalized !== prev && !opts.silent) {
-    document.dispatchEvent(new CustomEvent('subtitle:pref-changed', {
-      detail: { lang: normalized || null }
-    }));
-  }
-}
-
 function clearSubtitleButtons(){
   subtitleButtonMap.clear();
   if (subtitleButtonsWrap) subtitleButtonsWrap.innerHTML = '';
@@ -130,7 +110,7 @@ function addSubtitleButton({ code, label, isAuto = false }){
   btn.setAttribute('aria-pressed', 'false');
   btn.title = isAuto ? 'Automatically select subtitles' : `Switch subtitles to ${displayLabel}`;
   btn.addEventListener('click', () => {
-    setStoredPrefLang(normalized, { silent: false });
+    selectModalSubtitleLanguage(normalized || '');
   });
   subtitleButtonsWrap.appendChild(btn);
   subtitleButtonMap.set(normalized || '', btn);
@@ -201,9 +181,10 @@ function normalizeTrackLanguage(track){
   return normalizeLanguageCode(track.language || track.lang || track.label || track.code || '');
 }
 
-async function applyPreferredTextTrack(p) {
+async function applyPreferredTextTrack(p, opts = {}) {
   try {
-    const pref = getStoredPrefLang();
+    const override = canonicalLangCode(opts?.override);
+    const pref = override || getStoredPrefLang();
     for (let attempt = 0; attempt < 5; attempt++) {
       const tracks = await p.getTextTracks();
       if (tracks && tracks.length) {
@@ -253,6 +234,34 @@ async function applyPreferredTextTrack(p) {
   return '';
 }
 
+async function selectModalSubtitleLanguage(lang){
+  const normalized = canonicalLangCode(lang);
+  if (!player) {
+    setActiveSubtitleLanguage(normalized);
+    reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
+    if (currentId) await setTranscriptFor(currentId);
+    if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
+    return;
+  }
+  if (!normalized) {
+    await applyPreferredTextTrack(player);
+    if (currentId) await setTranscriptFor(currentId);
+    if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
+    return;
+  }
+  try {
+    const applied = await applyPreferredTextTrack(player, { override: normalized });
+    if (!applied) {
+      setActiveSubtitleLanguage(normalized);
+      reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
+    }
+  } catch (err) {
+    console.warn('selectModalSubtitleLanguage failed', err);
+  }
+  if (currentId) await setTranscriptFor(currentId);
+  if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
+}
+
 /* ---------------------------
    Transcript formatting
 ---------------------------- */
@@ -287,7 +296,8 @@ async function setTranscriptFor(id){
   const rec = (idx >= 0 && FILTERED) ? FILTERED[idx] : null;
   updateSubtitleButtonsForRecord(rec);
   const title = rec ? `${rec['Notion']||''}${rec['Interviewee name'] ? ' — ' + rec['Interviewee name'] : ''}` : '';
-  const transcriptInfo = rec ? getTranscriptForRow(rec, getStoredPrefLang()) : { text: '', lang: null };
+  const activeLang = currentSubtitleActive || canonicalLangCode(getStoredPrefLang());
+  const transcriptInfo = rec ? getTranscriptForRow(rec, activeLang || getStoredPrefLang()) : { text: '', lang: null };
   const raw   = transcriptInfo?.text || '';
   const transcriptLang = transcriptInfo?.lang || '';
 
@@ -339,7 +349,8 @@ async function prepareAudioScreenForIndex(idx){
   const row = FILTERED?.[idx];
   const notion  = row?.['Notion'] || '';
   const person  = row?.['Interviewee name'] || '';
-  const transcriptInfo = row ? getTranscriptForRow(row, getStoredPrefLang()) : { text: '', lang: null };
+  const activeLang = currentSubtitleActive || canonicalLangCode(getStoredPrefLang());
+  const transcriptInfo = row ? getTranscriptForRow(row, activeLang || getStoredPrefLang()) : { text: '', lang: null };
   const trans   = transcriptInfo?.text || '';
   audioTitle.textContent = person ? `${notion} — ${person}` : notion;
   audioTranscript.innerHTML = formatTranscriptToHtml(trans);
@@ -430,13 +441,7 @@ async function ensurePlayer(initId) {
         ignoreNextTextTrackChange = false;
         reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
       } else {
-        const stored = canonicalLangCode(getStoredPrefLang());
-        if (normalized !== stored) {
-          ignoreNextTextTrackChange = true;
-          setStoredPrefLang(normalized || '', { silent: false });
-        } else {
-          reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
-        }
+        reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
       }
 
       if (currentId) await setTranscriptFor(currentId);
