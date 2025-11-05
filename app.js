@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 import { loadRecords } from './assets/js/sheets.js';
 import { $, $$ } from './assets/js/utils.js';
 import { DATA, FILTERED, setSort, bindSorting, renderTable, applyFilters, bindRowInteractions, rerenderCurrent } from './assets/js/table.js';
-import { bindPlayer } from './assets/js/player.js';
+import { bindPlayer } from './assets/js/player-module.js';
 import { bindTranscript } from './assets/js/transcript.js';
 import { bindToolbar, refreshCollectionFilterOptions, applyCollectionFilterFromUrl } from './assets/js/toolbar.js';
 import { bindPdfExport } from './assets/js/pdf.js';
