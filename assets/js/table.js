@@ -1,8 +1,20 @@
 import { $, $$, escapeHtml, escapeAttr, durationFmt, extractVimeoId, vimeoThumbUrl, cmp } from './utils.js';
+import { getTranscriptForRow, languageLabel, normalizeLanguageCode } from './lang.js';
 
 export let DATA = [];
 export let FILTERED = [];
 export let sortKey, sortDir;
+
+let collectionFilter = '';
+let collectionFilterKey = '';
+
+function getPreferredLanguage() {
+  try {
+    return (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
 
 export function setSort(initialKey, initialDir){
   sortKey = initialKey; sortDir = initialDir;
@@ -26,8 +38,31 @@ export function rerenderCurrent() {
   renderTable(FILTERED);
 }
 
+export function setCollectionFilter(value) {
+  collectionFilter = (value || '').trim();
+  collectionFilterKey = normalizeCollectionToken(collectionFilter);
+  applyFilters();
+}
+
+export function getCollectionFilter() {
+  return collectionFilter;
+}
+
+export function getCollectionOptions() {
+  const seen = new Map();
+  DATA.forEach(row => {
+    const label = (row['Collection'] || '').trim();
+    if (!label) return;
+    const key = normalizeCollectionToken(label);
+    if (!key || seen.has(key)) return;
+    seen.set(key, label);
+  });
+  return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+}
+
 export function renderTable(rows){
   const tbody = $('#videoTable tbody'); tbody.innerHTML = '';
+  const prefLang = getPreferredLanguage();
   rows.forEach(row=>{
     const tr=document.createElement('tr');
     const notion = preferredNotion(row);
@@ -41,6 +76,18 @@ export function renderTable(rows){
     const transcript=row['Transcript']||'';
     const lateRaw = String(row['Late_4s'] ?? '').trim();
     const startAt = lateRaw === '1' ? 4 : 0;
+    const transcriptInfo = getTranscriptForRow(row, prefLang);
+    const transcript = transcriptInfo?.text || '';
+    const transcriptLang = transcriptInfo?.lang || '';
+    const lateRaw=(row['Late_4s']||'').trim();
+    let startAt = 0;
+    if (lateRaw) {
+      if (/^(1|true|yes)$/i.test(lateRaw)) startAt = 4;
+      else {
+        const lateNum = Number(lateRaw);
+        if (Number.isFinite(lateNum) && lateNum > 0) startAt = lateNum;
+      }
+    }
     const vid = extractVimeoId(link);
     tr.dataset.id = vid; // ✅ store video id on the row
     tr.dataset.link = link;   // <-- add this so we can read the hash later
@@ -52,7 +99,7 @@ export function renderTable(rows){
  <td class="col-collection">${escapeHtml(coll)}</td>
   <td>${notionLabel(row)}</td>
   <td>${escapeHtml(person)}</td>
-  <td class="col-transcript">${renderTranscriptCell(transcript, notion, person)}</td>
+  <td class="col-transcript">${renderTranscriptCell(transcript, notion, person, transcriptLang)}</td>
   <td class="col-keywords">${renderKeywords(keywords)}</td>    
   <td class="col-hidden">${escapeHtml(title)}</td>
   <td class="col-play"><button class="playBtn" data-id="${vid}" data-start-at="${startAt}" data-title="${escapeAttr(title||notion)}" title="Play">▶</button></td>
@@ -69,6 +116,10 @@ tbody.appendChild(tr);
   if (countEl) countEl.textContent = `${rows.length} items`;
 }
 
+function normalizeCollectionToken(str) {
+  return (str || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
 function renderKeywords(str){
   if(!str) return '<div class="kw-wrap"></div>';
   const chips = str
@@ -79,11 +130,18 @@ function renderKeywords(str){
   return `<div class="kw-wrap">${chips}</div>`;
 }
 
-function renderTranscriptCell(val, notion, person){
+function renderTranscriptCell(val, notion, person, langCode){
   if(!val) return '<span style="color:var(--muted)">—</span>';
   const safe=escapeAttr(val);
   if(/^https?:\/\//i.test(val)) return `<a href="${safe}" target="_blank" rel="noopener" title="Open transcript in new tab">Open ↗</a>`;
-  return `<button class="tbtn" data-title="${escapeAttr(notion + (person? ' — ' + person:''))}" data-text="${safe}">&#x21E9; </button>`;
+  const rawLang = (langCode && typeof langCode === 'string') ? String(langCode).toLowerCase() : '';
+  const langNorm = normalizeLanguageCode(rawLang) || rawLang;
+  const langLabel = langNorm && langNorm !== 'default' ? languageLabel(langNorm) : '';
+  const titleBase = notion + (person ? ' — ' + person : '');
+  const title = langLabel ? `${titleBase} (${langLabel})` : titleBase;
+  const langAttr = langNorm ? ` data-lang="${escapeAttr(langNorm)}"` : '';
+  const langLabelAttr = langLabel ? ` data-lang-label="${escapeAttr(langLabel)}"` : '';
+  return `<button class="tbtn" data-title="${escapeAttr(title)}" data-text="${safe}"${langAttr}${langLabelAttr}>&#x21E9;</button>`;
 }
 
 
@@ -126,8 +184,13 @@ function hideHover(){ hoverCard.style.display='none'; }
 
 export function applyFilters(){
   const q = ($('#search').value || '').trim().toLowerCase();
+  const hasQuery = !!q;
   FILTERED = DATA.filter(r=>{
-    if(!q) return true;
+    if (collectionFilterKey) {
+      const rowKey = normalizeCollectionToken(r['Collection'] || '');
+      if (rowKey !== collectionFilterKey) return false;
+    }
+    if (!hasQuery) return true;
     const hay=[r['Notion'], r['Interviewee name'], r['Title'], r['Keywords'], r['Collection'], r['Year']].join(' ').toLowerCase();
     return hay.includes(q);
   });
