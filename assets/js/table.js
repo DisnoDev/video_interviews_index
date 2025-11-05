@@ -73,6 +73,9 @@ export function renderTable(rows){
     const keywords=row['Keywords']||'';
     const link=row['Link']||'';
     const title=row['Title']||'';
+    const transcript=row['Transcript']||'';
+    const lateRaw = String(row['Late_4s'] ?? '').trim();
+    const startAt = lateRaw === '1' ? 4 : 0;
     const transcriptInfo = getTranscriptForRow(row, prefLang);
     const transcript = transcriptInfo?.text || '';
     const transcriptLang = transcriptInfo?.lang || '';

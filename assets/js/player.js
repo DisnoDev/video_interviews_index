@@ -45,6 +45,8 @@ let pendingStartAt = 0;
 let autoScrollReq = null, autoScrollStart = 0, autoScrollFrom = 0, autoScrollTo = 0, autoScrollDur = 0;
 function cancelAutoScroll(){ if (autoScrollReq) { cancelAnimationFrame(autoScrollReq); autoScrollReq = null; } }
 
+function computeLateStart(val){
+  return String(val ?? '').trim() === '1' ? 4 : 0;
 function canonicalLangCode(value){
   const raw = value ? String(value).toLowerCase() : '';
   if (!raw) return '';
