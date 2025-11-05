@@ -73,13 +73,10 @@ export function renderTable(rows){
     const keywords=row['Keywords']||'';
     const link=row['Link']||'';
     const title=row['Title']||'';
-    const transcript=row['Transcript']||'';
-    const lateRaw = String(row['Late_4s'] ?? '').trim();
-    const startAt = lateRaw === '1' ? 4 : 0;
     const transcriptInfo = getTranscriptForRow(row, prefLang);
-    const transcript = transcriptInfo?.text || '';
+    const transcript = transcriptInfo?.text || row['Transcript'] || '';
     const transcriptLang = transcriptInfo?.lang || '';
-    const lateRaw=(row['Late_4s']||'').trim();
+    const lateRaw = String(row['Late_4s'] ?? '').trim();
     let startAt = 0;
     if (lateRaw) {
       if (/^(1|true|yes)$/i.test(lateRaw)) startAt = 4;
