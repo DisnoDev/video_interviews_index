@@ -86,6 +86,12 @@ function sortRows(rows) {
 export function renderTable(rows){
   const tbody = $('#videoTable tbody'); tbody.innerHTML = '';
   const prefLang = getPreferredLanguage();
+  const cell = (cls, labelKey, fallback, valueHtml) => {
+    const classAttr = cls ? ` class="${cls}"` : '';
+    const label = labelKey ? `<span class="cell-label" data-i18n="${labelKey}">${escapeHtml(fallback)}</span>` : '';
+    return `<td${classAttr}>${label}<div class="cell-value">${valueHtml}</div></td>`;
+  };
+
   rows.forEach(row=>{
     const tr=document.createElement('tr');
     const notion = preferredNotion(row);
@@ -113,27 +119,31 @@ export function renderTable(rows){
     tr.dataset.link = link;   // <-- add this so we can read the hash later
     tr.dataset.startAt = String(startAt);
 
-    tr.innerHTML = `
-      <td class="col-year">${escapeHtml(year)}</td>
-      <td class="col-duration">${escapeHtml(dur)}</td>
- <td class="col-collection">${escapeHtml(coll)}</td>
-  <td>${notionLabel(row)}</td>
-  <td>${escapeHtml(person)}</td>
-  <td class="col-transcript">${renderTranscriptCell(transcript, notion, person, transcriptLang)}</td>
-  <td class="col-keywords">${renderKeywords(keywords)}</td>    
-  <td class="col-hidden">${escapeHtml(title)}</td>
-  <td class="col-play"><button class="playBtn" data-id="${vid}" data-start-at="${startAt}" data-title="${escapeAttr(title||notion)}" title="Play">▶</button></td>
-`;
+    const playButton = vid
+      ? `<button class="playBtn" type="button" data-id="${vid}" data-start-at="${startAt}" data-title="${escapeAttr(title||notion)}" data-i18n-title="thPlay" title="Play" aria-label="Play"><span class="play-icon" aria-hidden="true">▶</span><span class="play-label" data-i18n="thPlay">Play</span></button>`
+      : '';
 
+    tr.innerHTML = [
+      cell('col-year', 'thYear', 'Year', escapeHtml(year)),
+      cell('col-duration', 'thDuration', 'Duration', escapeHtml(dur)),
+      cell('col-collection', 'thCollection', 'Collection', escapeHtml(coll)),
+      cell('', 'thConcept', 'Concept', notionLabel(row)),
+      cell('', 'thAuthor', 'Author', escapeHtml(person)),
+      cell('col-transcript', 'thTranscript', 'Transcript', renderTranscriptCell(transcript, notion, person, transcriptLang)),
+      cell('col-keywords', 'thKeywords', 'Keywords', renderKeywords(keywords)),
+      cell('col-hidden', 'thTitle', 'Title', escapeHtml(title)),
+      cell('col-play', 'thPlay', 'Play', playButton)
+    ].join('');
 
-// (keep hover preview events)
-tr.addEventListener('mousemove', (e)=> showHover(e, vid, notion, person));
-tr.addEventListener('mouseleave', hideHover);
+    // (keep hover preview events)
+    tr.addEventListener('mousemove', (e)=> showHover(e, vid, notion, person));
+    tr.addEventListener('mouseleave', hideHover);
 
-tbody.appendChild(tr);
+    tbody.appendChild(tr);
   });
   const countEl = $('#count');
   if (countEl) countEl.textContent = `${rows.length} items`;
+  document.dispatchEvent(new CustomEvent('i18n:refresh', { detail: { scope: tbody } }));
 }
 
 function normalizeCollectionToken(str) {

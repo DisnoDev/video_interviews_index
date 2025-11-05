@@ -12,6 +12,8 @@ const TRANSLATIONS = {
     searchPlaceholder: 'Search… (concept, person, keywords, …)',
     langAuto: '📣 auto',
     audioOnlyMode: 'Audio-only mode',
+    thYear: 'Year',
+    thDuration: 'Duration',
     thCollection: 'Collection',
     thConcept: 'Concept',
     thAuthor: 'Author',
@@ -40,6 +42,8 @@ const TRANSLATIONS = {
     searchPlaceholder: 'Rechercher… (concept, personne, mots-clés, …)',
     langAuto: '📣 auto',
     audioOnlyMode: 'Mode audio uniquement',
+    thYear: 'Année',
+    thDuration: 'Durée',
     thCollection: 'Collection',
     thConcept: 'Concept',
     thAuthor: 'Auteur',
@@ -68,6 +72,8 @@ const TRANSLATIONS = {
     searchPlaceholder: 'Suchen… (Begriff, Person, Schlagwörter, …)',
     langAuto: '📣 automatisch',
     audioOnlyMode: 'Nur-Audio-Modus',
+    thYear: 'Jahr',
+    thDuration: 'Dauer',
     thCollection: 'Sammlung',
     thConcept: 'Konzept',
     thAuthor: 'Autor',
@@ -96,6 +102,8 @@ const TRANSLATIONS = {
     searchPlaceholder: 'Szukaj… (pojęcie, osoba, słowa kluczowe, …)',
     langAuto: '📣 automatycznie',
     audioOnlyMode: 'Tryb tylko audio',
+    thYear: 'Rok',
+    thDuration: 'Czas trwania',
     thCollection: 'Kolekcja',
     thConcept: 'Koncepcja',
     thAuthor: 'Autor',
@@ -124,6 +132,8 @@ const TRANSLATIONS = {
     searchPlaceholder: 'Zoek… (concept, persoon, trefwoorden, …)',
     langAuto: '📣 auto',
     audioOnlyMode: 'Alleen-audio-modus',
+    thYear: 'Jaar',
+    thDuration: 'Duur',
     thCollection: 'Collectie',
     thConcept: 'Concept',
     thAuthor: 'Auteur',
@@ -152,6 +162,8 @@ const TRANSLATIONS = {
     searchPlaceholder: 'Buscar… (concepto, persona, palabras clave, …)',
     langAuto: '📣 auto',
     audioOnlyMode: 'Modo solo audio',
+    thYear: 'Año',
+    thDuration: 'Duración',
     thCollection: 'Colección',
     thConcept: 'Concepto',
     thAuthor: 'Autor',
@@ -180,6 +192,8 @@ const TRANSLATIONS = {
     searchPlaceholder: 'Cerca… (concetto, persona, parole chiave, …)',
     langAuto: '📣 auto',
     audioOnlyMode: 'Modalità solo audio',
+    thYear: 'Anno',
+    thDuration: 'Durata',
     thCollection: 'Collezione',
     thConcept: 'Concetto',
     thAuthor: 'Autore',
@@ -208,6 +222,8 @@ const TRANSLATIONS = {
     searchPlaceholder: 'Pesquisar… (conceito, pessoa, palavras-chave, …)',
     langAuto: '📣 auto',
     audioOnlyMode: 'Modo apenas áudio',
+    thYear: 'Ano',
+    thDuration: 'Duração',
     thCollection: 'Coleção',
     thConcept: 'Conceito',
     thAuthor: 'Autor',
@@ -236,6 +252,8 @@ const TRANSLATIONS = {
     searchPlaceholder: '搜索…（概念、人物、关键词…）',
     langAuto: '📣 自动',
     audioOnlyMode: '纯音频模式',
+    thYear: '年份',
+    thDuration: '时长',
     thCollection: '合集',
     thConcept: '概念',
     thAuthor: '作者',
@@ -268,12 +286,12 @@ function getTranslation(lang, key) {
   return fallback[key] ?? null;
 }
 
-function applyTranslations(lang) {
+function applyTranslations(lang, scope = document) {
   const resolvedLang = resolveLang(lang);
 
   document.documentElement.setAttribute('lang', resolvedLang);
 
-  document.querySelectorAll('[data-i18n]').forEach((el) => {
+  scope.querySelectorAll('[data-i18n]').forEach((el) => {
     const key = el.dataset.i18n;
     const translation = getTranslation(resolvedLang, key);
     if (translation !== null && translation !== undefined) {
@@ -281,7 +299,7 @@ function applyTranslations(lang) {
     }
   });
 
-  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+  scope.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
     const key = el.dataset.i18nPlaceholder;
     const translation = getTranslation(resolvedLang, key);
     if (translation !== null && translation !== undefined) {
@@ -289,7 +307,7 @@ function applyTranslations(lang) {
     }
   });
 
-  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+  scope.querySelectorAll('[data-i18n-title]').forEach((el) => {
     const key = el.dataset.i18nTitle;
     const translation = getTranslation(resolvedLang, key);
     if (translation !== null && translation !== undefined) {
@@ -297,6 +315,12 @@ function applyTranslations(lang) {
     }
   });
 }
+
+document.addEventListener('i18n:refresh', (event) => {
+  const lang = document.documentElement.getAttribute('lang') || DEFAULT_LANG;
+  const scope = event?.detail?.scope;
+  applyTranslations(lang, scope || document);
+});
 
 function getSavedLanguage() {
   try {

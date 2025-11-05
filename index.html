@@ -78,8 +78,14 @@
       <table id="videoTable">
         <thead>
           <tr>
-                   <th class="sortable col-year" data-key="Year">&nbsp; &#x1F4C5;</th>
-                        <th class="sortable col-duration" data-key="Duration (s)">&nbsp; &#128337;</th>
+                   <th class="sortable col-year" data-key="Year" title="Year" data-i18n-title="thYear">
+                      <span aria-hidden="true">&#x1F4C5;</span>
+                      <span class="sr-only" data-i18n="thYear">Year</span>
+                    </th>
+                        <th class="sortable col-duration" data-key="Duration (s)" title="Duration" data-i18n-title="thDuration">
+                          <span aria-hidden="true">&#128337;</span>
+                          <span class="sr-only" data-i18n="thDuration">Duration</span>
+                        </th>
                <th style="visibility:hidden; display: none;" class="sortable col-collection" data-key="Collection" data-i18n="thCollection">Collection</th>
             <th class="sortable" data-key="Notion" data-i18n="thConcept">Concept</th>
             <th class="sortable" data-key="Interviewee name" data-i18n="thAuthor">Author</th>
