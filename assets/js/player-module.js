@@ -18,6 +18,9 @@ const fsModalBtn      = q('#fsModal');
 const ao              = q('#aoOverlay');          // optional overlay for large text display
 const subtitleControls   = q('#subtitleControls');
 const subtitleButtonsWrap = q('#subtitleButtons');
+const transcriptActions  = q('#transcriptActions');
+const openTranscriptPanelBtn = q('#openTranscriptPanel');
+const downloadTranscriptBtn  = q('#downloadTranscriptBtn');
 
 // Transcript UI (scoped to modal)
 const audioScreen     = q('#audioScreen');
@@ -304,12 +307,16 @@ function renderTranscriptInto(el, raw, { track = false } = {}){
   el.innerHTML = html;
   if (track) {
     trackedTranscriptElement = el;
-    currentTranscriptChunkMeta = chunks.map((chunk) => {
-      const canonical = canonicalCueString(chunk);
-      return {
-        canonical,
-        words: canonical.split(/\s+/).filter(Boolean)
-      };
+    currentTranscriptChunkMeta = [];
+    const nodes = el.querySelectorAll('.transcript-chunk');
+    nodes.forEach((node) => {
+      const idx = Number(node.dataset.transcriptChunk);
+      const targetIndex = Number.isFinite(idx) && idx >= 0 ? idx : currentTranscriptChunkMeta.length;
+      const chunkText = Number.isFinite(idx) && idx >= 0 && idx < chunks.length
+        ? chunks[idx]
+        : node.textContent || '';
+      const meta = prepareChunkMeta(node, chunkText);
+      currentTranscriptChunkMeta[targetIndex] = meta;
     });
     lastHighlightedChunk = -1;
     clearTranscriptHighlight();
@@ -318,6 +325,35 @@ function renderTranscriptInto(el, raw, { track = false } = {}){
     }
   }
   return chunks;
+}
+
+function prepareChunkMeta(node, chunkText){
+  if (!node) return { canonical: '', words: [], wordNodes: [], element: null };
+  const canonical = canonicalCueString(chunkText);
+  const text = node.textContent || '';
+  const segments = tokenizeChunkText(text);
+  const frag = document.createDocumentFragment();
+  const wordNodes = [];
+  const words = [];
+  let wordIndex = 0;
+  segments.forEach((seg) => {
+    if (!seg) return;
+    if (seg.isWord) {
+      const span = document.createElement('span');
+      span.className = 'transcript-word';
+      span.dataset.wordIndex = String(wordIndex);
+      span.textContent = seg.text;
+      frag.appendChild(span);
+      wordNodes.push(span);
+      words.push(seg.canonical);
+      wordIndex++;
+    } else if (seg.text) {
+      frag.appendChild(document.createTextNode(seg.text));
+    }
+  });
+  node.innerHTML = '';
+  node.appendChild(frag);
+  return { canonical, words, wordNodes, element: node };
 }
 
 function canonicalCueString(str){
@@ -334,8 +370,33 @@ function canonicalCueString(str){
   }
 }
 
+function canonicalWord(str){
+  const value = canonicalCueString(str);
+  return value.replace(/\s+/g, '');
+}
+
+function tokenizeChunkText(text){
+  if (!text) return [];
+  const tokens = [];
+  const regex = /([\p{L}\p{N}\u2019']+|\s+|[^\s\p{L}\p{N}\u2019'])/gu;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const value = match[0];
+    const isWord = /[\p{L}\p{N}\u2019']/u.test(value) && !/^\s+$/.test(value);
+    tokens.push({
+      text: value,
+      isWord,
+      canonical: isWord ? canonicalWord(value) : ''
+    });
+  }
+  return tokens;
+}
+
 function clearTranscriptHighlight(){
   if (!trackedTranscriptElement) return;
+  trackedTranscriptElement.querySelectorAll('.transcript-word--active').forEach((node) => {
+    node.classList.remove('transcript-word--active');
+  });
   trackedTranscriptElement.querySelectorAll('.transcript-chunk.is-active').forEach((node) => {
     node.classList.remove('is-active');
   });
@@ -359,16 +420,65 @@ function ensureChunkVisible(el){
   }
 }
 
-function setActiveChunk(index){
-  if (!trackedTranscriptElement) return;
-  const nodes = trackedTranscriptElement.querySelectorAll('.transcript-chunk');
-  nodes.forEach((node) => {
-    const nodeIndex = Number(node.dataset.transcriptChunk);
-    const active = Number.isFinite(index) && nodeIndex === index;
-    node.classList.toggle('is-active', active);
-    if (active) ensureChunkVisible(node.closest('p') || node);
+function setActiveChunkWords(index, matchedWordIndexes = new Set()) {
+  if (!trackedTranscriptElement || !currentTranscriptChunkMeta) return;
+  currentTranscriptChunkMeta.forEach((meta, idx) => {
+    if (!meta) return;
+    const isActive = idx === index && matchedWordIndexes.size > 0;
+    if (meta.wordNodes) {
+      meta.wordNodes.forEach((node, wordIdx) => {
+        const shouldHighlight = isActive && matchedWordIndexes.has(wordIdx);
+        node.classList.toggle('transcript-word--active', shouldHighlight);
+      });
+    }
+    if (meta.element) {
+      meta.element.classList.toggle('is-active', isActive);
+      if (isActive) ensureChunkVisible(meta.element.closest('p') || meta.element);
+    }
   });
   lastHighlightedChunk = index;
+}
+
+function determineWordMatches(meta, cueWords) {
+  const matches = new Set();
+  if (!meta || !Array.isArray(meta.words) || !meta.words.length || !cueWords.length) {
+    return matches;
+  }
+
+  const words = meta.words;
+  const cueLen = cueWords.length;
+
+  // Try to find an exact contiguous match first
+  for (let start = 0; start <= words.length - cueLen; start++) {
+    let ok = true;
+    for (let i = 0; i < cueLen; i++) {
+      if (words[start + i] !== cueWords[i]) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) {
+      for (let i = 0; i < cueLen; i++) matches.add(start + i);
+      return matches;
+    }
+  }
+
+  // Fallback: match words sequentially, skipping non-matching tokens
+  let cueIdx = 0;
+  for (let i = 0; i < words.length && cueIdx < cueLen; i++) {
+    if (words[i] === cueWords[cueIdx]) {
+      matches.add(i);
+      cueIdx++;
+    }
+  }
+  if (matches.size) return matches;
+
+  // Last resort: highlight any overlapping words (set intersection)
+  const cueSet = new Set(cueWords);
+  words.forEach((word, idx) => {
+    if (cueSet.has(word)) matches.add(idx);
+  });
+  return matches;
 }
 
 function highlightTranscriptCue(rawText){
@@ -417,8 +527,14 @@ function highlightTranscriptCue(rawText){
     return;
   }
 
-  if (bestIndex !== lastHighlightedChunk) {
-    setActiveChunk(bestIndex);
+  const meta = currentTranscriptChunkMeta[bestIndex];
+  const matches = determineWordMatches(meta, cueWords);
+  if ((!matches || matches.size === 0) && meta?.wordNodes?.length) {
+    const fallbackMatches = new Set();
+    meta.wordNodes.forEach((_, idx) => fallbackMatches.add(idx));
+    setActiveChunkWords(bestIndex, fallbackMatches);
+  } else {
+    setActiveChunkWords(bestIndex, matches);
   }
 }
 
@@ -457,6 +573,8 @@ async function setTranscriptFor(id){
   const transcriptInfo = rec ? getTranscriptForRow(rec, activeLang || getStoredPrefLang()) : { text: '', lang: null };
   const raw   = transcriptInfo?.text || '';
   const transcriptLang = transcriptInfo?.lang || '';
+  const canonicalTranscriptLang = canonicalLangCode(transcriptLang);
+  const transcriptLabel = canonicalTranscriptLang ? languageLabel(canonicalTranscriptLang) : '';
 
   const overlayHtml    = (title ? `<div class="ao-title">${escapeHtml(title)}</div>` : '') +
                          `<div class="ao-text">${formatOverlay(raw)}`;
@@ -467,18 +585,43 @@ async function setTranscriptFor(id){
   if (audioTitle)      audioTitle.textContent = title || '';
   if (audioTranscript) {
     renderTranscriptInto(audioTranscript, raw, { track: true });
-    if (transcriptLang) {
-      audioTranscript.setAttribute('data-lang', canonicalLangCode(transcriptLang));
+    if (canonicalTranscriptLang) {
+      audioTranscript.setAttribute('data-lang', canonicalTranscriptLang);
     } else {
       audioTranscript.removeAttribute('data-lang');
     }
   }
   if (ao)              ao.innerHTML = overlayHtml;
   if (subtitleControls) {
-    const normLang = canonicalLangCode(transcriptLang);
+    const normLang = canonicalTranscriptLang;
     if (normLang) subtitleControls.setAttribute('data-transcript-lang', normLang);
     else subtitleControls.removeAttribute('data-transcript-lang');
   }
+  if (transcriptActions) {
+    if (raw) {
+      transcriptActions.removeAttribute('hidden');
+      if (canonicalTranscriptLang) transcriptActions.setAttribute('data-lang', canonicalTranscriptLang);
+      else transcriptActions.removeAttribute('data-lang');
+    } else {
+      transcriptActions.setAttribute('hidden', '');
+      transcriptActions.removeAttribute('data-lang');
+    }
+  }
+  if (downloadTranscriptBtn) {
+    downloadTranscriptBtn.disabled = !raw;
+    downloadTranscriptBtn.setAttribute('aria-disabled', raw ? 'false' : 'true');
+    downloadTranscriptBtn.dataset.lang = canonicalTranscriptLang || '';
+  }
+
+  document.dispatchEvent(new CustomEvent('transcript:updated', {
+    detail: {
+      id: targetId,
+      text: raw,
+      lang: canonicalTranscriptLang || '',
+      label: transcriptLabel || '',
+      title
+    }
+  }));
 }
 
 /* ---------------------------
@@ -745,5 +888,16 @@ export function bindPlayer() {
     if (document.body.classList.contains('audio-mode') && currentIndex >= 0 && audioAutoScrollEl?.checked) {
       await prepareAudioScreenForIndex(currentIndex);
     }
+  });
+
+  openTranscriptPanelBtn?.addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('transcript:open-request'));
+  });
+
+  downloadTranscriptBtn?.addEventListener('click', () => {
+    if (downloadTranscriptBtn.disabled) return;
+    document.dispatchEvent(new CustomEvent('transcript:download-request', {
+      detail: { format: 'txt' }
+    }));
   });
 }

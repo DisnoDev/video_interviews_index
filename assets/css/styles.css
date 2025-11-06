@@ -276,11 +276,6 @@ th { position: relative; }
   padding: 3px 6px; margin: 1px; border-radius: 6px; border: 1px solid var(--line);
   background: transparent; color: var(--ink); cursor: pointer; line-height: 1.1; white-space: normal;
 }
-.tbtn {
-  font-size: 16px; background: transparent; border: 0; display: inline-block; white-space: normal;
-  padding: 0 3px; margin: 1px; border-radius: 6px;
-}
-
 .hover-card{
   backdrop-filter: blur(6px); color: var(--ink); position:fixed; pointer-events:none;
   width:360px; max-width:80vw; background: color-mix(in oklab, rgba(0,0,0,0) 68%, transparent);
@@ -394,22 +389,23 @@ body.audio-mode #aoOverlay { display:block; }
 #audioTitle { margin:0; font-size: clamp(16px, 3vw, 24px); line-height:1.2; }
 .audio-txt { flex:1; overflow:auto; font-size: clamp(18px, 3.2vw, 22px); line-height:1.5; letter-spacing:0.2px; padding-right:8px; }
 .audio-txt p { margin: 0 0 0.9em 0; }
-.audio-txt .transcript-chunk { transition: background-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease; border-radius: 6px; padding: 0 2px; }
-.audio-txt .transcript-highlight,
-.transcript .transcript-highlight {
-  background: rgba(125, 211, 252, 0.35);
-  color: var(--ink);
-  box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.4);
+.audio-txt .transcript-chunk,
+.transcript .transcript-chunk {
+  transition: background-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
   border-radius: 4px;
   padding: 0 2px;
-  transition: background-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
 }
-.transcript .transcript-chunk { transition: background-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease; border-radius: 4px; padding: 0 2px; }
-.audio-txt .transcript-chunk.is-active,
-.transcript .transcript-chunk.is-active {
+
+.transcript-word {
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+.transcript-word--active {
   background: rgba(125, 211, 252, 0.35);
+  box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.35);
   color: var(--ink);
-  box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.4);
 }
 .audio-controls { display:flex; gap:14px; align-items:center; color:var(--muted); font-size:14px; }
 
@@ -425,7 +421,6 @@ p {
 
 /* Column visibility toggles */
 [data-show-keywords="0"] .col-keywords { display:none; }
-[data-show-transcript="0"] .col-transcript { display:none; }
 [data-show-duration="0"] .col-duration,
 [data-show-year="0"] .col-year,
 [data-show-collection="0"] .col-collection,
@@ -556,6 +551,20 @@ p {
 }
 
 .subtitle-controls[hidden] {
+  display: none !important;
+}
+
+.transcript-actions,
+#modal .transcript-actions {
+  width: min(92vw, 960px);
+  margin: 8px auto 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.transcript-actions[hidden] {
   display: none !important;
 }
 

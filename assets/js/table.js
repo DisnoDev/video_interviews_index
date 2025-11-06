@@ -1,5 +1,4 @@
 import { $, $$, escapeHtml, escapeAttr, durationFmt, extractVimeoId, vimeoThumbUrl, cmp } from './utils.js';
-import { getTranscriptForRow, languageLabel, normalizeLanguageCode } from './lang.js';
 
 export let DATA = [];
 export let FILTERED = [];
@@ -7,14 +6,6 @@ export let sortKey, sortDir;
 
 let collectionFilter = '';
 let collectionFilterKey = '';
-
-function getPreferredLanguage() {
-  try {
-    return (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
-  } catch {
-    return '';
-  }
-}
 
 export function setSort(initialKey, initialDir){
   sortKey = initialKey; sortDir = initialDir;
@@ -85,7 +76,6 @@ function sortRows(rows) {
 
 export function renderTable(rows){
   const tbody = $('#videoTable tbody'); tbody.innerHTML = '';
-  const prefLang = getPreferredLanguage();
   const cell = (cls, labelKey, fallback, valueHtml) => {
     const classAttr = cls ? ` class="${cls}"` : '';
     const label = labelKey ? `<span class="cell-label" data-i18n="${labelKey}">${escapeHtml(fallback)}</span>` : '';
@@ -102,9 +92,6 @@ export function renderTable(rows){
     const keywords=row['Keywords']||'';
     const link=row['Link']||'';
     const title=row['Title']||'';
-    const transcriptInfo = getTranscriptForRow(row, prefLang);
-    const transcript = transcriptInfo?.text || row['Transcript'] || '';
-    const transcriptLang = transcriptInfo?.lang || '';
     const lateRaw = String(row['Late_4s'] ?? '').trim();
     let startAt = 0;
     if (lateRaw) {
@@ -129,7 +116,6 @@ export function renderTable(rows){
       cell('col-collection', 'thCollection', 'Collection', escapeHtml(coll)),
       cell('', 'thConcept', 'Concept', notionLabel(row)),
       cell('', 'thAuthor', 'Author', escapeHtml(person)),
-      cell('col-transcript', 'thTranscript', 'Transcript', renderTranscriptCell(transcript, notion, person, transcriptLang)),
       cell('col-keywords', 'thKeywords', 'Keywords', renderKeywords(keywords)),
       cell('col-hidden', 'thTitle', 'Title', escapeHtml(title)),
       cell('col-play', 'thPlay', 'Play', playButton)
@@ -159,21 +145,6 @@ function renderKeywords(str){
     .join('');
   return `<div class="kw-wrap">${chips}</div>`;
 }
-
-function renderTranscriptCell(val, notion, person, langCode){
-  if(!val) return '<span style="color:var(--muted)">—</span>';
-  const safe=escapeAttr(val);
-  if(/^https?:\/\//i.test(val)) return `<a href="${safe}" target="_blank" rel="noopener" title="Open transcript in new tab">Open ↗</a>`;
-  const rawLang = (langCode && typeof langCode === 'string') ? String(langCode).toLowerCase() : '';
-  const langNorm = normalizeLanguageCode(rawLang) || rawLang;
-  const langLabel = langNorm && langNorm !== 'default' ? languageLabel(langNorm) : '';
-  const titleBase = notion + (person ? ' — ' + person : '');
-  const title = langLabel ? `${titleBase} (${langLabel})` : titleBase;
-  const langAttr = langNorm ? ` data-lang="${escapeAttr(langNorm)}"` : '';
-  const langLabelAttr = langLabel ? ` data-lang-label="${escapeAttr(langLabel)}"` : '';
-  return `<button class="tbtn" data-title="${escapeAttr(title)}" data-text="${safe}"${langAttr}${langLabelAttr}>&#x21E9;</button>`;
-}
-
 
 function preferredNotion(row) {
   const pref = (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
@@ -255,7 +226,7 @@ export function bindRowInteractions() {
     // 3) Row click → play (ignore interactive elements)
     const tr = e.target.closest('#videoTable tbody tr');
     if (!tr) return;
-    if (e.target.closest('a,button,.kbtn,.tbtn')) return;
+    if (e.target.closest('a,button,.kbtn')) return;
 
     const id = tr.dataset.id;
     const startAt = Number(tr.dataset.startAt || 0);
