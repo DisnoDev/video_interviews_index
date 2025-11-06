@@ -34,10 +34,10 @@ function makeFileName(title){
 function activeSubtitleLanguage(){
   const controls = document.getElementById('subtitleControls');
   if (controls) {
-    const applied = controls.getAttribute('data-transcript-lang');
-    if (applied) return applied;
     const active = controls.getAttribute('data-active-lang');
     if (active) return active;
+    const applied = controls.getAttribute('data-transcript-lang');
+    if (applied) return applied;
   }
   try {
     return (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
