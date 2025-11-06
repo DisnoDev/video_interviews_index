@@ -1,5 +1,7 @@
 // assets/js/transcript.js
 import { $, escapeHtml } from './utils.js';
+import { FILTERED, indexOfIdInFiltered } from './table.js';
+import { getTranscriptForRow, languageLabel, normalizeLanguageCode } from './lang.js';
 import { exportSingleTranscriptPdf } from './pdf.js';
 
 const tmodal    = $('#tmodal');
@@ -16,7 +18,7 @@ function formatTranscript(txt){
     ? norm.split(/\n\n+/)
     : norm.split(/(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Ý0-9])/);
   parts = parts.map(p => p.replace(/\n+/g,' ').trim()).filter(Boolean);
-  return parts.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+  return parts.map((p, idx) => `<p class="transcript-paragraph" data-transcript-chunk="${idx}"><span class="transcript-chunk" data-transcript-chunk="${idx}">${escapeHtml(p)}</span></p>`).join('');
 }
 
 function decodeHtml(html){
@@ -27,6 +29,40 @@ function decodeHtml(html){
 
 function makeFileName(title){
   return String(title || 'Transcript').replace(/[\/:*?"<>|]+/g,'_').slice(0,120);
+}
+
+function activeSubtitleLanguage(){
+  const controls = document.getElementById('subtitleControls');
+  if (controls) {
+    const applied = controls.getAttribute('data-transcript-lang');
+    if (applied) return applied;
+    const active = controls.getAttribute('data-active-lang');
+    if (active) return active;
+  }
+  try {
+    return (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function resolveRowForButton(btn){
+  if (!btn) return null;
+  const tr = btn.closest('tr');
+  if (!tr) return null;
+  const id = tr.dataset.id || '';
+  if (!id) return null;
+  const idx = indexOfIdInFiltered(id);
+  if (idx === -1) return null;
+  return FILTERED[idx] || null;
+}
+
+function labelForLanguage(lang, fallback = '') {
+  if (!lang) return fallback;
+  const lower = String(lang).toLowerCase();
+  if (lower === 'default') return fallback;
+  const norm = normalizeLanguageCode(lang);
+  return languageLabel(norm || lang, fallback);
 }
 
 export function bindTranscript(){
@@ -44,8 +80,38 @@ export function bindTranscript(){
     const rawAttr = tbtn.dataset.text || '';
     const rawPlain = decodeHtml(rawAttr); // ✅ decode attribute value
 
-    tTitle.textContent = title;
-    tBody.innerHTML = formatTranscript(rawPlain);
+    let transcriptText = rawPlain;
+    let transcriptLang = tbtn.dataset.lang || '';
+    let transcriptLabel = tbtn.dataset.langLabel || '';
+
+    const row = resolveRowForButton(tbtn);
+    if (row) {
+      const preferredLang = activeSubtitleLanguage();
+      const info = getTranscriptForRow(row, preferredLang);
+      if (info?.text) {
+        transcriptText = info.text;
+        if (info.lang) {
+          transcriptLang = info.lang;
+          transcriptLabel = labelForLanguage(info.lang, transcriptLabel);
+        }
+      }
+    }
+
+    const displayLabel = transcriptLabel || labelForLanguage(transcriptLang);
+    const displayTitle = displayLabel ? `${title} (${displayLabel})` : title;
+
+    tTitle.textContent = displayTitle;
+    tBody.innerHTML = formatTranscript(transcriptText);
+    if (transcriptLang) {
+      const norm = normalizeLanguageCode(transcriptLang);
+      if (norm) {
+        tBody.setAttribute('data-lang', norm);
+      } else {
+        tBody.removeAttribute('data-lang');
+      }
+    } else {
+      tBody.removeAttribute('data-lang');
+    }
     tmodal.classList.add('open');
   });
 

@@ -45,6 +45,12 @@ let pendingStartAt = 0;
 let autoScrollReq = null, autoScrollStart = 0, autoScrollFrom = 0, autoScrollTo = 0, autoScrollDur = 0;
 function cancelAutoScroll(){ if (autoScrollReq) { cancelAnimationFrame(autoScrollReq); autoScrollReq = null; } }
 
+// Transcript highlight tracking
+let trackedTranscriptElement = null;
+let currentTranscriptChunkMeta = [];
+let lastHighlightedChunk = -1;
+let lastCueRawText = '';
+
 function canonicalLangCode(value){
   const raw = value ? String(value).toLowerCase() : '';
   if (!raw) return '';
@@ -271,20 +277,268 @@ function formatOverlay(txt){
   return parts.map(p=>`<p>${escapeHtml(p)}</p>`).join('') || '<p style="opacity:.6">No transcript.</p>';
 }
 
-function formatTranscriptToHtml(txt){
-  if (!txt) return '<p style="color:var(--muted)">No transcript available.</p>';
+function splitTranscriptChunks(txt){
+  if (!txt) return [];
   const norm = String(txt).replace(/\r\n/g,'\n').replace(/\r/g,'\n').trim();
   let parts = norm.includes('\n\n') ? norm.split(/\n\n+/) : norm.split(/(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Ý0-9])/);
   parts = parts.map(p => p.replace(/\n+/g,' ').trim()).filter(Boolean);
-  const esc = (s) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  return parts.map(p => `<p>${esc(p)}</p>`).join('');
+  return parts;
+}
+
+function tokenizeTranscriptChunk(text){
+  if (!text) return [];
+  const tokens = [];
+  const regex = /(\s+|[^\s]+)/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    const value = match[0];
+    const isWhitespace = /^\s+$/.test(value);
+    const canonical = isWhitespace ? '' : canonicalCueString(value);
+    tokens.push({
+      text: value,
+      canonical,
+      isWord: !isWhitespace && !!canonical,
+      isWhitespace
+    });
+  }
+  return tokens;
+}
+
+function buildTranscriptDom(chunks, { track = false } = {}){
+  const fragment = document.createDocumentFragment();
+  const meta = [];
+
+  if (!chunks || !chunks.length) {
+    const p = document.createElement('p');
+    p.style.color = 'var(--muted)';
+    p.textContent = 'No transcript available.';
+    fragment.appendChild(p);
+    return { fragment, meta };
+  }
+
+  chunks.forEach((chunk, idx) => {
+    const p = document.createElement('p');
+    p.className = 'transcript-paragraph';
+    p.dataset.transcriptChunk = idx;
+
+    const span = document.createElement('span');
+    span.className = 'transcript-chunk';
+    span.dataset.transcriptChunk = idx;
+    span.textContent = chunk;
+    p.appendChild(span);
+
+    fragment.appendChild(p);
+
+    if (track) {
+      const canonical = canonicalCueString(chunk);
+      const words = canonical.split(/\s+/).filter(Boolean);
+      const tokens = tokenizeTranscriptChunk(chunk);
+      meta.push({
+        canonical,
+        words,
+        tokens,
+        element: span,
+        originalHtml: span.innerHTML,
+        paragraph: p,
+        text: chunk
+      });
+    }
+  });
+
+  return { fragment, meta };
+}
+
+function renderTranscriptInto(el, raw, { track = false } = {}){
+  if (!el) return [];
+  const chunks = splitTranscriptChunks(raw);
+  const { fragment, meta } = buildTranscriptDom(chunks, { track });
+  el.innerHTML = '';
+  el.appendChild(fragment);
+  if (track) {
+    trackedTranscriptElement = el;
+    currentTranscriptChunkMeta = meta;
+    lastHighlightedChunk = -1;
+    clearTranscriptHighlight();
+    if (lastCueRawText) {
+      highlightTranscriptCue(lastCueRawText);
+    }
+  }
+  return chunks;
+}
+
+function canonicalCueString(str){
+  if (!str) return '';
+  try {
+    return str
+      .normalize('NFD')
+      .replace(/\p{M}+/gu, '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim();
+  } catch {
+    return String(str).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+}
+
+function clearTranscriptHighlight(){
+  if (!trackedTranscriptElement || !currentTranscriptChunkMeta.length) {
+    lastHighlightedChunk = -1;
+    return;
+  }
+  currentTranscriptChunkMeta.forEach((meta) => {
+    if (!meta?.element) return;
+    if (meta.element.innerHTML !== meta.originalHtml) {
+      meta.element.innerHTML = meta.originalHtml;
+    }
+    meta.element.classList.remove('is-active');
+    if (meta.paragraph) {
+      meta.paragraph.classList.remove('is-active');
+    }
+  });
+  lastHighlightedChunk = -1;
+}
+
+function ensureChunkVisible(el){
+  if (!el || !trackedTranscriptElement) return;
+  if (audioAutoScrollEl?.checked) return; // let auto-scroll drive the view
+  const parent = trackedTranscriptElement;
+  const parentRect = parent.getBoundingClientRect();
+  const rect = el.getBoundingClientRect();
+  const isVisible = rect.top >= parentRect.top && rect.bottom <= parentRect.bottom;
+  if (!isVisible) {
+    const offset = Math.max(0, el.offsetTop - parent.clientHeight * 0.3);
+    if (typeof parent.scrollTo === 'function') {
+      parent.scrollTo({ top: offset, behavior: 'smooth' });
+    } else {
+      parent.scrollTop = offset;
+    }
+  }
+}
+
+function buildChunkHighlightHtml(meta, canonicalCue, cueWords){
+  if (!meta || !meta.tokens || !meta.tokens.length) return meta?.originalHtml || '';
+  const counts = new Map();
+  cueWords.forEach((word) => {
+    if (!word) return;
+    counts.set(word, (counts.get(word) || 0) + 1);
+  });
+  let matched = 0;
+  const parts = meta.tokens.map((token) => {
+    if (!token) return '';
+    if (token.isWhitespace || !token.canonical) {
+      return escapeHtml(token.text);
+    }
+    const canonical = token.canonical;
+    const available = counts.get(canonical) || 0;
+    if (available > 0) {
+      counts.set(canonical, available - 1);
+      matched++;
+      return `<span class="transcript-highlight">${escapeHtml(token.text)}</span>`;
+    }
+    return escapeHtml(token.text);
+  });
+
+  if (!matched) {
+    if (canonicalCue && (meta.canonical === canonicalCue || meta.canonical.includes(canonicalCue) || canonicalCue.includes(meta.canonical))) {
+      return `<span class="transcript-highlight">${escapeHtml(meta.text)}</span>`;
+    }
+  }
+
+  return parts.join('');
+}
+
+function applyActiveChunk(index, canonicalCue, cueWords){
+  currentTranscriptChunkMeta.forEach((meta, idx) => {
+    if (!meta?.element) return;
+    const isActive = Number.isFinite(index) && idx === index;
+    if (isActive) {
+      const html = buildChunkHighlightHtml(meta, canonicalCue, cueWords);
+      if (meta.element.innerHTML !== html) {
+        meta.element.innerHTML = html;
+      }
+      meta.element.classList.add('is-active');
+      if (meta.paragraph) meta.paragraph.classList.add('is-active');
+      ensureChunkVisible(meta.paragraph || meta.element);
+    } else {
+      if (meta.element.innerHTML !== meta.originalHtml) {
+        meta.element.innerHTML = meta.originalHtml;
+      }
+      meta.element.classList.remove('is-active');
+      if (meta.paragraph) meta.paragraph.classList.remove('is-active');
+    }
+  });
+  lastHighlightedChunk = index;
+}
+
+function highlightTranscriptCue(rawText){
+  if (!trackedTranscriptElement || !currentTranscriptChunkMeta.length) {
+    lastCueRawText = rawText || '';
+    return;
+  }
+  const canonicalCue = canonicalCueString(rawText);
+  lastCueRawText = rawText || '';
+  if (!canonicalCue) {
+    clearTranscriptHighlight();
+    return;
+  }
+
+  const cueWords = canonicalCue.split(/\s+/).filter(Boolean);
+  const cueWordSet = new Set(cueWords);
+  let bestIndex = -1;
+  let bestScore = 0;
+
+  currentTranscriptChunkMeta.forEach((meta, idx) => {
+    if (!meta || !meta.canonical) return;
+    let score = 0;
+    if (meta.canonical === canonicalCue) {
+      score = 1000;
+    } else {
+      if (meta.canonical.includes(canonicalCue)) score += 400;
+      if (canonicalCue.includes(meta.canonical)) score += 350;
+      if (cueWords.length && meta.words.length) {
+        let overlap = 0;
+        meta.words.forEach((w) => { if (cueWordSet.has(w)) overlap++; });
+        if (overlap) {
+          const cueRatio = overlap / cueWords.length;
+          const chunkRatio = overlap / meta.words.length;
+          score += overlap * 25 + cueRatio * 120 + chunkRatio * 80;
+        }
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = idx;
+    }
+  });
+
+  if (bestIndex === -1) {
+    clearTranscriptHighlight();
+    return;
+  }
+
+  applyActiveChunk(bestIndex, canonicalCue, cueWords);
+}
+
+function extractCueText(evt){
+  if (!evt) return '';
+  if (Array.isArray(evt.cues) && evt.cues.length) {
+    return evt.cues.map((cue) => cue?.text || '').join(' ').trim();
+  }
+  if (evt.cue && typeof evt.cue.text === 'string') return evt.cue.text;
+  if (typeof evt.text === 'string') return evt.text;
+  return '';
 }
 
 /* ---------------------------
    Transcript updater (race-safe)
 ---------------------------- */
 async function setTranscriptFor(id){
-  currentRecordId = String(id);
+  const targetId = String(id);
+  const isSameRecord = currentRecordId === targetId;
+  currentRecordId = targetId;
+  if (!isSameRecord) {
+    lastCueRawText = '';
+  }
   const seq = ++transcriptSeq;
 
   // Clear immediately to avoid showing stale text
@@ -303,15 +557,13 @@ async function setTranscriptFor(id){
 
   const overlayHtml    = (title ? `<div class="ao-title">${escapeHtml(title)}</div>` : '') +
                          `<div class="ao-text">${formatOverlay(raw)}`;
-  const transcriptHtml = formatTranscriptToHtml(raw);
-
   // Abort if superseded
   if (seq !== transcriptSeq) return;
 
   // Commit to modal elements only
   if (audioTitle)      audioTitle.textContent = title || '';
   if (audioTranscript) {
-    audioTranscript.innerHTML = transcriptHtml;
+    renderTranscriptInto(audioTranscript, raw, { track: true });
     if (transcriptLang) {
       audioTranscript.setAttribute('data-lang', canonicalLangCode(transcriptLang));
     } else {
@@ -353,7 +605,7 @@ async function prepareAudioScreenForIndex(idx){
   const transcriptInfo = row ? getTranscriptForRow(row, activeLang || getStoredPrefLang()) : { text: '', lang: null };
   const trans   = transcriptInfo?.text || '';
   audioTitle.textContent = person ? `${notion} — ${person}` : notion;
-  audioTranscript.innerHTML = formatTranscriptToHtml(trans);
+  renderTranscriptInto(audioTranscript, trans, { track: true });
   if (transcriptInfo?.lang) {
     audioTranscript.setAttribute('data-lang', canonicalLangCode(transcriptInfo.lang));
   } else {
@@ -448,6 +700,10 @@ async function ensurePlayer(initId) {
       if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
     });
 
+    player.on('cuechange', (evt) => {
+      highlightTranscriptCue(extractCueText(evt));
+    });
+
     player.on('ended', async () => {
       if (!isAutoplayEnabled() || !isAutoplaySessionActive()) return;
       const next = nextPlayableIdFromFiltered(currentIndex);
@@ -523,6 +779,12 @@ function close() {
   cancelAutoScroll();
   pendingStartAt = 0;
   document.body.classList.remove('audio-mode');
+  clearTranscriptHighlight();
+  currentRecordId = null;
+  currentTranscriptChunkMeta = [];
+  lastHighlightedChunk = -1;
+  lastCueRawText = '';
+  trackedTranscriptElement = null;
   if (player) player.unload().catch(()=>{});
   else if (iframe) iframe.src = '';
 }
