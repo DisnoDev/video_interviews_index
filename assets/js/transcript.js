@@ -16,7 +16,7 @@ function formatTranscript(txt){
     ? norm.split(/\n\n+/)
     : norm.split(/(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Ý0-9])/);
   parts = parts.map(p => p.replace(/\n+/g,' ').trim()).filter(Boolean);
-  return parts.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+  return parts.map((p, idx) => `<p class="transcript-paragraph" data-transcript-chunk="${idx}"><span class="transcript-chunk" data-transcript-chunk="${idx}">${escapeHtml(p)}</span></p>`).join('');
 }
 
 function decodeHtml(html){
