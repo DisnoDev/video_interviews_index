@@ -28,8 +28,10 @@ const TRANSLATIONS = {
     audioSpeed: 'Speed',
     transcriptTitle: 'Transcript',
     noTranscript: 'No transcript available.',
+    openTranscript: 'Transcript',
     downloadPdf: 'Download .pdf',
-    downloadTxt: 'Download .txt'
+    downloadTxt: 'Download .txt',
+    downloadTranscript: 'Download transcript'
   },
   fr: {
     headerTitle: 'Index des entretiens vidéo',
@@ -58,8 +60,10 @@ const TRANSLATIONS = {
     audioSpeed: 'Vitesse',
     transcriptTitle: 'Transcription',
     noTranscript: 'Aucune transcription disponible.',
+    openTranscript: 'Transcription',
     downloadPdf: 'Télécharger .pdf',
-    downloadTxt: 'Télécharger .txt'
+    downloadTxt: 'Télécharger .txt',
+    downloadTranscript: 'Télécharger la transcription'
   },
   de: {
     headerTitle: 'Video-Interviews-Index',
@@ -88,8 +92,10 @@ const TRANSLATIONS = {
     audioSpeed: 'Geschwindigkeit',
     transcriptTitle: 'Transkript',
     noTranscript: 'Kein Transkript verfügbar.',
+    openTranscript: 'Transkript',
     downloadPdf: 'PDF herunterladen',
-    downloadTxt: 'TXT herunterladen'
+    downloadTxt: 'TXT herunterladen',
+    downloadTranscript: 'Transkript herunterladen'
   },
   pl: {
     headerTitle: 'Indeks wywiadów wideo',
@@ -118,8 +124,10 @@ const TRANSLATIONS = {
     audioSpeed: 'Prędkość',
     transcriptTitle: 'Transkrypcja',
     noTranscript: 'Brak dostępnej transkrypcji.',
+    openTranscript: 'Transkrypcja',
     downloadPdf: 'Pobierz .pdf',
-    downloadTxt: 'Pobierz .txt'
+    downloadTxt: 'Pobierz .txt',
+    downloadTranscript: 'Pobierz transkrypcję'
   },
   nl: {
     headerTitle: 'Index van video-interviews',
@@ -148,8 +156,10 @@ const TRANSLATIONS = {
     audioSpeed: 'Snelheid',
     transcriptTitle: 'Transcript',
     noTranscript: 'Geen transcript beschikbaar.',
+    openTranscript: 'Transcriptie',
     downloadPdf: 'Download .pdf',
-    downloadTxt: 'Download .txt'
+    downloadTxt: 'Download .txt',
+    downloadTranscript: 'Transcriptie downloaden'
   },
   es: {
     headerTitle: 'Índice de entrevistas en video',
@@ -178,8 +188,10 @@ const TRANSLATIONS = {
     audioSpeed: 'Velocidad',
     transcriptTitle: 'Transcripción',
     noTranscript: 'No hay transcripción disponible.',
+    openTranscript: 'Transcripción',
     downloadPdf: 'Descargar .pdf',
-    downloadTxt: 'Descargar .txt'
+    downloadTxt: 'Descargar .txt',
+    downloadTranscript: 'Descargar transcripción'
   },
   it: {
     headerTitle: 'Indice delle interviste video',
@@ -208,8 +220,10 @@ const TRANSLATIONS = {
     audioSpeed: 'Velocità',
     transcriptTitle: 'Trascrizione',
     noTranscript: 'Nessuna trascrizione disponibile.',
+    openTranscript: 'Trascrizione',
     downloadPdf: 'Scarica .pdf',
-    downloadTxt: 'Scarica .txt'
+    downloadTxt: 'Scarica .txt',
+    downloadTranscript: 'Scarica trascrizione'
   },
   pt: {
     headerTitle: 'Índice de entrevistas em vídeo',
@@ -238,8 +252,10 @@ const TRANSLATIONS = {
     audioSpeed: 'Velocidade',
     transcriptTitle: 'Transcrição',
     noTranscript: 'Nenhuma transcrição disponível.',
+    openTranscript: 'Transcrição',
     downloadPdf: 'Baixar .pdf',
-    downloadTxt: 'Baixar .txt'
+    downloadTxt: 'Baixar .txt',
+    downloadTranscript: 'Baixar transcrição'
   },
   cn: {
     headerTitle: '视频访谈索引',
@@ -268,8 +284,10 @@ const TRANSLATIONS = {
     audioSpeed: '速度',
     transcriptTitle: '文字稿',
     noTranscript: '暂无可用文字稿。',
+    openTranscript: '文字稿',
     downloadPdf: '下载 .pdf',
-    downloadTxt: '下载 .txt'
+    downloadTxt: '下载 .txt',
+    downloadTranscript: '下载文字稿'
   }
 };
 

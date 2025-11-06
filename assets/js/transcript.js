@@ -1,7 +1,5 @@
 // assets/js/transcript.js
 import { $, escapeHtml } from './utils.js';
-import { FILTERED, indexOfIdInFiltered } from './table.js';
-import { getTranscriptForRow, languageLabel, normalizeLanguageCode } from './lang.js';
 import { exportSingleTranscriptPdf } from './pdf.js';
 
 const tmodal    = $('#tmodal');
@@ -10,6 +8,16 @@ const tTitle    = $('#tTitle');
 const tBody     = $('#tBody');
 const tdownload = $('#tdownload');
 const tdownloadPdf = $('#tdownloadPdf');
+
+const DEFAULT_TITLE = 'Transcript';
+
+let currentTranscript = {
+  id: '',
+  title: DEFAULT_TITLE,
+  text: '',
+  lang: '',
+  label: ''
+};
 
 function formatTranscript(txt){
   if (!txt) return '<em style="color:var(--muted)">No transcript available.</em>';
@@ -21,48 +29,63 @@ function formatTranscript(txt){
   return parts.map((p, idx) => `<p class="transcript-paragraph" data-transcript-chunk="${idx}"><span class="transcript-chunk" data-transcript-chunk="${idx}">${escapeHtml(p)}</span></p>`).join('');
 }
 
-function decodeHtml(html){
-  const x = document.createElement('textarea');
-  x.innerHTML = html;
-  return x.value;
-}
-
 function makeFileName(title){
   return String(title || 'Transcript').replace(/[\/:*?"<>|]+/g,'_').slice(0,120);
 }
 
-function activeSubtitleLanguage(){
-  const controls = document.getElementById('subtitleControls');
-  if (controls) {
-    const active = controls.getAttribute('data-active-lang');
-    if (active) return active;
-    const applied = controls.getAttribute('data-transcript-lang');
-    if (applied) return applied;
-  }
-  try {
-    return (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
-  } catch {
-    return '';
+function transcriptDisplayTitle(){
+  const base = currentTranscript.title || DEFAULT_TITLE;
+  return currentTranscript.label ? `${base} (${currentTranscript.label})` : base;
+}
+
+function applyTranscriptToModal(){
+  if (!tTitle || !tBody) return;
+  tTitle.textContent = transcriptDisplayTitle();
+  tBody.innerHTML = formatTranscript(currentTranscript.text);
+  if (currentTranscript.lang) {
+    tBody.setAttribute('data-lang', currentTranscript.lang);
+  } else {
+    tBody.removeAttribute('data-lang');
   }
 }
 
-function resolveRowForButton(btn){
-  if (!btn) return null;
-  const tr = btn.closest('tr');
-  if (!tr) return null;
-  const id = tr.dataset.id || '';
-  if (!id) return null;
-  const idx = indexOfIdInFiltered(id);
-  if (idx === -1) return null;
-  return FILTERED[idx] || null;
+function reflectDownloadAvailability(){
+  const hasText = !!currentTranscript.text;
+  if (tdownload) {
+    tdownload.disabled = !hasText;
+    tdownload.setAttribute('aria-disabled', hasText ? 'false' : 'true');
+  }
+  if (tdownloadPdf) {
+    tdownloadPdf.disabled = !hasText;
+    tdownloadPdf.setAttribute('aria-disabled', hasText ? 'false' : 'true');
+  }
 }
 
-function labelForLanguage(lang, fallback = '') {
-  if (!lang) return fallback;
-  const lower = String(lang).toLowerCase();
-  if (lower === 'default') return fallback;
-  const norm = normalizeLanguageCode(lang);
-  return languageLabel(norm || lang, fallback);
+function updateTranscriptState(detail = {}) {
+  const nextTitle = detail.title || currentTranscript.title || DEFAULT_TITLE;
+  currentTranscript = {
+    id: detail.id || currentTranscript.id || '',
+    title: nextTitle,
+    text: typeof detail.text === 'string' ? detail.text : '',
+    lang: detail.lang || '',
+    label: detail.label || ''
+  };
+  applyTranscriptToModal();
+  reflectDownloadAvailability();
+}
+
+function downloadCurrentTranscript(){
+  if (!currentTranscript.text) return;
+  const title = transcriptDisplayTitle();
+  const blob = new Blob([currentTranscript.text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = makeFileName(title) + ' — disnovation.txt';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function bindTranscript(){
@@ -71,48 +94,20 @@ export function bindTranscript(){
     return;
   }
 
-  // Open: delegated click
-  document.addEventListener('click', (e) => {
-    const tbtn = e.target.closest('.tbtn');
-    if (!tbtn) return;
+  applyTranscriptToModal();
+  reflectDownloadAvailability();
 
-    const title = tbtn.dataset.title || 'Transcript';
-    const rawAttr = tbtn.dataset.text || '';
-    const rawPlain = decodeHtml(rawAttr); // ✅ decode attribute value
+  document.addEventListener('transcript:updated', (e) => {
+    updateTranscriptState(e?.detail || {});
+  });
 
-    let transcriptText = rawPlain;
-    let transcriptLang = tbtn.dataset.lang || '';
-    let transcriptLabel = tbtn.dataset.langLabel || '';
-
-    const row = resolveRowForButton(tbtn);
-    if (row) {
-      const preferredLang = activeSubtitleLanguage();
-      const info = getTranscriptForRow(row, preferredLang);
-      if (info?.text) {
-        transcriptText = info.text;
-        if (info.lang) {
-          transcriptLang = info.lang;
-          transcriptLabel = labelForLanguage(info.lang, transcriptLabel);
-        }
-      }
-    }
-
-    const displayLabel = transcriptLabel || labelForLanguage(transcriptLang);
-    const displayTitle = displayLabel ? `${title} (${displayLabel})` : title;
-
-    tTitle.textContent = displayTitle;
-    tBody.innerHTML = formatTranscript(transcriptText);
-    if (transcriptLang) {
-      const norm = normalizeLanguageCode(transcriptLang);
-      if (norm) {
-        tBody.setAttribute('data-lang', norm);
-      } else {
-        tBody.removeAttribute('data-lang');
-      }
-    } else {
-      tBody.removeAttribute('data-lang');
-    }
+  document.addEventListener('transcript:open-request', () => {
+    applyTranscriptToModal();
     tmodal.classList.add('open');
+  });
+
+  document.addEventListener('transcript:download-request', () => {
+    downloadCurrentTranscript();
   });
 
   // Close
@@ -121,23 +116,14 @@ export function bindTranscript(){
 
   // Download .txt
   if (tdownload) {
-    tdownload.addEventListener('click', ()=>{
-      const title = tTitle.textContent || 'Transcript';
-      const rawPlain = tBody.innerText || '';
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([rawPlain], { type: 'text/plain;charset=utf-8' }));
-      a.download = makeFileName(title) + ' — disnovation.txt';
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-    });
+    tdownload.addEventListener('click', downloadCurrentTranscript);
   }
 
   // Download .pdf
   if (tdownloadPdf) {
     tdownloadPdf.addEventListener('click', ()=>{
-      const title = tTitle.textContent || 'Transcript';
-      const rawPlain = tBody.innerText || '';
-      exportSingleTranscriptPdf({ title, transcript: rawPlain });
+      if (!currentTranscript.text) return;
+      exportSingleTranscriptPdf({ title: transcriptDisplayTitle(), transcript: currentTranscript.text });
     });
   }
 }

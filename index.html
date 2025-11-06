@@ -12,7 +12,6 @@
 </head>
 <body
   data-show-keywords="0"
-  data-show-transcript="0"
   data-show-duration="0"
   data-show-year="0"
   data-show-collection="1"
@@ -39,7 +38,6 @@
           <span class="toggle2" data-i18n="showLabel">Show: </span>
           <!--<span class="toggle" data-col="year">Year</span>
           <span class="toggle" data-col="duration">Duration </span>-->
-          <span class="toggle" data-col="transcript" data-i18n="toggleTranscript">Transcript </span>
           <span class="toggle" data-col="keywords" data-i18n="toggleKeywords">Keywords</span>
           <span class="toggle" id="exportPdfBtn" aria-pressed="false">&#x21F2; PDF</span>
 
@@ -89,7 +87,6 @@
                <th style="visibility:hidden; display: none;" class="sortable col-collection" data-key="Collection" data-i18n="thCollection">Collection</th>
             <th class="sortable" data-key="Notion" data-i18n="thConcept">Concept</th>
             <th class="sortable" data-key="Interviewee name" data-i18n="thAuthor">Author</th>
-            <th class="sortable col-transcript" data-key="Transcript" data-i18n="thTranscript">&#x1F4C3;</th>
             <th class="sortable col-keywords" data-key="Keywords" data-i18n="thKeywords">Keywords</th>
        
      
@@ -126,6 +123,11 @@
     <div id="subtitleControls" class="subtitle-controls" hidden>
       <span id="subtitleHelper" class="subtitle-label" data-i18n="modalSubtitles">Subtitles</span>
       <div id="subtitleButtons" class="subtitle-buttons" role="group" aria-label="Subtitle languages"></div>
+    </div>
+
+    <div id="transcriptActions" class="transcript-actions" hidden>
+      <button id="openTranscriptPanel" class="pill" type="button" data-i18n="openTranscript">Transcript</button>
+      <button id="downloadTranscriptBtn" class="pill" type="button" data-i18n="downloadTranscript">Download transcript</button>
     </div>
 
     <!-- keep this one -->
