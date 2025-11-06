@@ -420,29 +420,30 @@ function ensureChunkVisible(el){
   }
 }
 
-function setActiveChunkWords(index, matchedWordIndexes = new Set()) {
+function setActiveChunkHighlight(index, range = null) {
   if (!trackedTranscriptElement || !currentTranscriptChunkMeta) return;
+  const hasRange = range && Number.isInteger(range.start) && Number.isInteger(range.end) && range.start <= range.end;
   currentTranscriptChunkMeta.forEach((meta, idx) => {
     if (!meta) return;
-    const isActive = idx === index && matchedWordIndexes.size > 0;
+    const isTarget = idx === index;
     if (meta.wordNodes) {
       meta.wordNodes.forEach((node, wordIdx) => {
-        const shouldHighlight = isActive && matchedWordIndexes.has(wordIdx);
+        const shouldHighlight = isTarget && hasRange && wordIdx >= range.start && wordIdx <= range.end;
         node.classList.toggle('transcript-word--active', shouldHighlight);
       });
     }
     if (meta.element) {
-      meta.element.classList.toggle('is-active', isActive);
-      if (isActive) ensureChunkVisible(meta.element.closest('p') || meta.element);
+      const shouldActivateChunk = isTarget && (hasRange || !meta.wordNodes?.length);
+      meta.element.classList.toggle('is-active', shouldActivateChunk);
+      if (shouldActivateChunk) ensureChunkVisible(meta.element.closest('p') || meta.element);
     }
   });
-  lastHighlightedChunk = index;
+  lastHighlightedChunk = hasRange || (currentTranscriptChunkMeta[index]?.wordNodes?.length === 0) ? index : -1;
 }
 
-function determineWordMatches(meta, cueWords) {
-  const matches = new Set();
+function determineWordRange(meta, cueWords) {
   if (!meta || !Array.isArray(meta.words) || !meta.words.length || !cueWords.length) {
-    return matches;
+    return null;
   }
 
   const words = meta.words;
@@ -458,27 +459,47 @@ function determineWordMatches(meta, cueWords) {
       }
     }
     if (ok) {
-      for (let i = 0; i < cueLen; i++) matches.add(start + i);
-      return matches;
+      return { start, end: start + cueLen - 1 };
     }
   }
 
   // Fallback: match words sequentially, skipping non-matching tokens
   let cueIdx = 0;
+  let first = -1;
+  let last = -1;
   for (let i = 0; i < words.length && cueIdx < cueLen; i++) {
     if (words[i] === cueWords[cueIdx]) {
-      matches.add(i);
+      if (first === -1) first = i;
+      last = i;
       cueIdx++;
     }
   }
-  if (matches.size) return matches;
+  if (cueIdx > 0 && first !== -1) {
+    return { start: first, end: last >= first ? last : first };
+  }
 
   // Last resort: highlight any overlapping words (set intersection)
   const cueSet = new Set(cueWords);
+  let min = Infinity;
+  let max = -1;
   words.forEach((word, idx) => {
-    if (cueSet.has(word)) matches.add(idx);
+    if (cueSet.has(word)) {
+      if (idx < min) min = idx;
+      if (idx > max) max = idx;
+    }
   });
-  return matches;
+  if (Number.isFinite(min) && Number.isFinite(max) && max >= min) {
+    return { start: min, end: max };
+  }
+  return null;
+}
+
+function clampWordRange(range, wordCount) {
+  if (!range || !Number.isInteger(range.start) || !Number.isInteger(range.end) || wordCount <= 0) return null;
+  const maxIndex = wordCount - 1;
+  const start = Math.max(0, Math.min(range.start, maxIndex));
+  const end = Math.max(start, Math.min(range.end, maxIndex));
+  return { start, end };
 }
 
 function highlightTranscriptCue(rawText){
@@ -528,13 +549,11 @@ function highlightTranscriptCue(rawText){
   }
 
   const meta = currentTranscriptChunkMeta[bestIndex];
-  const matches = determineWordMatches(meta, cueWords);
-  if ((!matches || matches.size === 0) && meta?.wordNodes?.length) {
-    const fallbackMatches = new Set();
-    meta.wordNodes.forEach((_, idx) => fallbackMatches.add(idx));
-    setActiveChunkWords(bestIndex, fallbackMatches);
+  const range = clampWordRange(determineWordRange(meta, cueWords), meta?.wordNodes?.length || 0);
+  if (!range && meta?.wordNodes?.length) {
+    setActiveChunkHighlight(bestIndex, { start: 0, end: meta.wordNodes.length - 1 });
   } else {
-    setActiveChunkWords(bestIndex, matches);
+    setActiveChunkHighlight(bestIndex, range);
   }
 }
 
