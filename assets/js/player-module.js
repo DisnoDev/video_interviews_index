@@ -245,11 +245,19 @@ async function applyPreferredTextTrack(p, opts = {}) {
 
 async function selectModalSubtitleLanguage(lang){
   const normalized = canonicalLangCode(lang);
+  const hasExplicitOverride = !!normalized;
+  setActiveSubtitleLanguage(normalized || '');
+  reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
+
   if (!player) {
-    setActiveSubtitleLanguage(normalized);
-    reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
-    if (currentId) await setTranscriptFor(currentId);
-    if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
+    if (currentId) {
+      if (hasExplicitOverride) await setTranscriptFor(currentId, { languageOverride: normalized });
+      else await setTranscriptFor(currentId);
+    }
+    if (currentIndex >= 0) {
+      if (hasExplicitOverride) await prepareAudioScreenForIndex(currentIndex, { languageOverride: normalized });
+      else await prepareAudioScreenForIndex(currentIndex);
+    }
     return;
   }
   if (!normalized) {
@@ -267,8 +275,8 @@ async function selectModalSubtitleLanguage(lang){
   } catch (err) {
     console.warn('selectModalSubtitleLanguage failed', err);
   }
-  if (currentId) await setTranscriptFor(currentId);
-  if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
+  if (currentId) await setTranscriptFor(currentId, { languageOverride: normalized });
+  if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex, { languageOverride: normalized });
 }
 
 /* ---------------------------
@@ -570,7 +578,7 @@ function extractCueText(evt){
 /* ---------------------------
    Transcript updater (race-safe)
 ---------------------------- */
-async function setTranscriptFor(id){
+async function setTranscriptFor(id, opts = {}){
   const targetId = String(id);
   const isSameRecord = currentRecordId === targetId;
   currentRecordId = targetId;
@@ -588,8 +596,11 @@ async function setTranscriptFor(id){
   const rec = (idx >= 0 && FILTERED) ? FILTERED[idx] : null;
   updateSubtitleButtonsForRecord(rec);
   const title = rec ? `${rec['Notion']||''}${rec['Interviewee name'] ? ' — ' + rec['Interviewee name'] : ''}` : '';
-  const activeLang = currentSubtitleActive || canonicalLangCode(getStoredPrefLang());
-  const transcriptInfo = rec ? getTranscriptForRow(rec, activeLang || getStoredPrefLang()) : { text: '', lang: null };
+  const explicitLang = canonicalLangCode(opts?.languageOverride);
+  const activeLang = explicitLang || currentSubtitleActive || canonicalLangCode(getStoredPrefLang());
+  const transcriptInfo = rec
+    ? getTranscriptForRow(rec, activeLang || getStoredPrefLang())
+    : { text: '', lang: null };
   const raw   = transcriptInfo?.text || '';
   const transcriptLang = transcriptInfo?.lang || '';
   const canonicalTranscriptLang = canonicalLangCode(transcriptLang);
@@ -661,13 +672,16 @@ function applyAudioUi(id){
 /* ---------------------------
    Prepare audio screen (autoscroll)
 ---------------------------- */
-async function prepareAudioScreenForIndex(idx){
+async function prepareAudioScreenForIndex(idx, opts = {}){
   if (!audioScreen || !audioTranscript || !audioTitle || !player) return;
   const row = FILTERED?.[idx];
   const notion  = row?.['Notion'] || '';
   const person  = row?.['Interviewee name'] || '';
-  const activeLang = currentSubtitleActive || canonicalLangCode(getStoredPrefLang());
-  const transcriptInfo = row ? getTranscriptForRow(row, activeLang || getStoredPrefLang()) : { text: '', lang: null };
+  const explicitLang = canonicalLangCode(opts?.languageOverride);
+  const activeLang = explicitLang || currentSubtitleActive || canonicalLangCode(getStoredPrefLang());
+  const transcriptInfo = row
+    ? getTranscriptForRow(row, activeLang || getStoredPrefLang())
+    : { text: '', lang: null };
   const trans   = transcriptInfo?.text || '';
   audioTitle.textContent = person ? `${notion} — ${person}` : notion;
   renderTranscriptInto(audioTranscript, trans, { track: true });
