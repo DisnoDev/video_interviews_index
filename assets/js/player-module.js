@@ -45,6 +45,12 @@ let pendingStartAt = 0;
 let autoScrollReq = null, autoScrollStart = 0, autoScrollFrom = 0, autoScrollTo = 0, autoScrollDur = 0;
 function cancelAutoScroll(){ if (autoScrollReq) { cancelAnimationFrame(autoScrollReq); autoScrollReq = null; } }
 
+// Transcript highlight tracking
+let trackedTranscriptElement = null;
+let currentTranscriptChunkMeta = [];
+let lastHighlightedChunk = -1;
+let lastCueRawText = '';
+
 function canonicalLangCode(value){
   const raw = value ? String(value).toLowerCase() : '';
   if (!raw) return '';
@@ -271,20 +277,171 @@ function formatOverlay(txt){
   return parts.map(p=>`<p>${escapeHtml(p)}</p>`).join('') || '<p style="opacity:.6">No transcript.</p>';
 }
 
-function formatTranscriptToHtml(txt){
-  if (!txt) return '<p style="color:var(--muted)">No transcript available.</p>';
+function splitTranscriptChunks(txt){
+  if (!txt) return [];
   const norm = String(txt).replace(/\r\n/g,'\n').replace(/\r/g,'\n').trim();
   let parts = norm.includes('\n\n') ? norm.split(/\n\n+/) : norm.split(/(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Ý0-9])/);
   parts = parts.map(p => p.replace(/\n+/g,' ').trim()).filter(Boolean);
-  const esc = (s) => s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  return parts.map(p => `<p>${esc(p)}</p>`).join('');
+  return parts;
+}
+
+function buildTranscriptHtml(chunks){
+  if (!chunks || !chunks.length) {
+    return {
+      html: '<p style="color:var(--muted)">No transcript available.</p>',
+      chunks: []
+    };
+  }
+  const html = chunks
+    .map((chunk, idx) => `<p class="transcript-paragraph" data-transcript-chunk="${idx}"><span class="transcript-chunk" data-transcript-chunk="${idx}">${escapeHtml(chunk)}</span></p>`)
+    .join('');
+  return { html, chunks };
+}
+
+function renderTranscriptInto(el, raw, { track = false } = {}){
+  if (!el) return [];
+  const { html, chunks } = buildTranscriptHtml(splitTranscriptChunks(raw));
+  el.innerHTML = html;
+  if (track) {
+    trackedTranscriptElement = el;
+    currentTranscriptChunkMeta = chunks.map((chunk) => {
+      const canonical = canonicalCueString(chunk);
+      return {
+        canonical,
+        words: canonical.split(/\s+/).filter(Boolean)
+      };
+    });
+    lastHighlightedChunk = -1;
+    clearTranscriptHighlight();
+    if (lastCueRawText) {
+      highlightTranscriptCue(lastCueRawText);
+    }
+  }
+  return chunks;
+}
+
+function canonicalCueString(str){
+  if (!str) return '';
+  try {
+    return str
+      .normalize('NFD')
+      .replace(/\p{M}+/gu, '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim();
+  } catch {
+    return String(str).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+}
+
+function clearTranscriptHighlight(){
+  if (!trackedTranscriptElement) return;
+  trackedTranscriptElement.querySelectorAll('.transcript-chunk.is-active').forEach((node) => {
+    node.classList.remove('is-active');
+  });
+  lastHighlightedChunk = -1;
+}
+
+function ensureChunkVisible(el){
+  if (!el || !trackedTranscriptElement) return;
+  if (audioAutoScrollEl?.checked) return; // let auto-scroll drive the view
+  const parent = trackedTranscriptElement;
+  const parentRect = parent.getBoundingClientRect();
+  const rect = el.getBoundingClientRect();
+  const isVisible = rect.top >= parentRect.top && rect.bottom <= parentRect.bottom;
+  if (!isVisible) {
+    const offset = Math.max(0, el.offsetTop - parent.clientHeight * 0.3);
+    if (typeof parent.scrollTo === 'function') {
+      parent.scrollTo({ top: offset, behavior: 'smooth' });
+    } else {
+      parent.scrollTop = offset;
+    }
+  }
+}
+
+function setActiveChunk(index){
+  if (!trackedTranscriptElement) return;
+  const nodes = trackedTranscriptElement.querySelectorAll('.transcript-chunk');
+  nodes.forEach((node) => {
+    const nodeIndex = Number(node.dataset.transcriptChunk);
+    const active = Number.isFinite(index) && nodeIndex === index;
+    node.classList.toggle('is-active', active);
+    if (active) ensureChunkVisible(node.closest('p') || node);
+  });
+  lastHighlightedChunk = index;
+}
+
+function highlightTranscriptCue(rawText){
+  if (!trackedTranscriptElement || !currentTranscriptChunkMeta.length) {
+    lastCueRawText = rawText || '';
+    return;
+  }
+  const canonicalCue = canonicalCueString(rawText);
+  lastCueRawText = rawText || '';
+  if (!canonicalCue) {
+    clearTranscriptHighlight();
+    return;
+  }
+
+  const cueWords = canonicalCue.split(/\s+/).filter(Boolean);
+  const cueWordSet = new Set(cueWords);
+  let bestIndex = -1;
+  let bestScore = 0;
+
+  currentTranscriptChunkMeta.forEach((meta, idx) => {
+    if (!meta || !meta.canonical) return;
+    let score = 0;
+    if (meta.canonical === canonicalCue) {
+      score = 1000;
+    } else {
+      if (meta.canonical.includes(canonicalCue)) score += 400;
+      if (canonicalCue.includes(meta.canonical)) score += 350;
+      if (cueWords.length && meta.words.length) {
+        let overlap = 0;
+        meta.words.forEach((w) => { if (cueWordSet.has(w)) overlap++; });
+        if (overlap) {
+          const cueRatio = overlap / cueWords.length;
+          const chunkRatio = overlap / meta.words.length;
+          score += overlap * 25 + cueRatio * 120 + chunkRatio * 80;
+        }
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = idx;
+    }
+  });
+
+  if (bestIndex === -1) {
+    clearTranscriptHighlight();
+    return;
+  }
+
+  if (bestIndex !== lastHighlightedChunk) {
+    setActiveChunk(bestIndex);
+  }
+}
+
+function extractCueText(evt){
+  if (!evt) return '';
+  if (Array.isArray(evt.cues) && evt.cues.length) {
+    return evt.cues.map((cue) => cue?.text || '').join(' ').trim();
+  }
+  if (evt.cue && typeof evt.cue.text === 'string') return evt.cue.text;
+  if (typeof evt.text === 'string') return evt.text;
+  return '';
 }
 
 /* ---------------------------
    Transcript updater (race-safe)
 ---------------------------- */
 async function setTranscriptFor(id){
-  currentRecordId = String(id);
+  const targetId = String(id);
+  const isSameRecord = currentRecordId === targetId;
+  currentRecordId = targetId;
+  if (!isSameRecord) {
+    lastCueRawText = '';
+  }
   const seq = ++transcriptSeq;
 
   // Clear immediately to avoid showing stale text
@@ -303,15 +460,13 @@ async function setTranscriptFor(id){
 
   const overlayHtml    = (title ? `<div class="ao-title">${escapeHtml(title)}</div>` : '') +
                          `<div class="ao-text">${formatOverlay(raw)}`;
-  const transcriptHtml = formatTranscriptToHtml(raw);
-
   // Abort if superseded
   if (seq !== transcriptSeq) return;
 
   // Commit to modal elements only
   if (audioTitle)      audioTitle.textContent = title || '';
   if (audioTranscript) {
-    audioTranscript.innerHTML = transcriptHtml;
+    renderTranscriptInto(audioTranscript, raw, { track: true });
     if (transcriptLang) {
       audioTranscript.setAttribute('data-lang', canonicalLangCode(transcriptLang));
     } else {
@@ -353,7 +508,7 @@ async function prepareAudioScreenForIndex(idx){
   const transcriptInfo = row ? getTranscriptForRow(row, activeLang || getStoredPrefLang()) : { text: '', lang: null };
   const trans   = transcriptInfo?.text || '';
   audioTitle.textContent = person ? `${notion} — ${person}` : notion;
-  audioTranscript.innerHTML = formatTranscriptToHtml(trans);
+  renderTranscriptInto(audioTranscript, trans, { track: true });
   if (transcriptInfo?.lang) {
     audioTranscript.setAttribute('data-lang', canonicalLangCode(transcriptInfo.lang));
   } else {
@@ -448,6 +603,10 @@ async function ensurePlayer(initId) {
       if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
     });
 
+    player.on('cuechange', (evt) => {
+      highlightTranscriptCue(extractCueText(evt));
+    });
+
     player.on('ended', async () => {
       if (!isAutoplayEnabled() || !isAutoplaySessionActive()) return;
       const next = nextPlayableIdFromFiltered(currentIndex);
@@ -523,6 +682,12 @@ function close() {
   cancelAutoScroll();
   pendingStartAt = 0;
   document.body.classList.remove('audio-mode');
+  clearTranscriptHighlight();
+  currentRecordId = null;
+  currentTranscriptChunkMeta = [];
+  lastHighlightedChunk = -1;
+  lastCueRawText = '';
+  trackedTranscriptElement = null;
   if (player) player.unload().catch(()=>{});
   else if (iframe) iframe.src = '';
 }
