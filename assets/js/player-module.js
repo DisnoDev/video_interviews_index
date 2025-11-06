@@ -285,78 +285,32 @@ function splitTranscriptChunks(txt){
   return parts;
 }
 
-function tokenizeTranscriptChunk(text){
-  if (!text) return [];
-  const tokens = [];
-  const regex = /(\s+|[^\s]+)/g;
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    const value = match[0];
-    const isWhitespace = /^\s+$/.test(value);
-    const canonical = isWhitespace ? '' : canonicalCueString(value);
-    tokens.push({
-      text: value,
-      canonical,
-      isWord: !isWhitespace && !!canonical,
-      isWhitespace
-    });
-  }
-  return tokens;
-}
-
-function buildTranscriptDom(chunks, { track = false } = {}){
-  const fragment = document.createDocumentFragment();
-  const meta = [];
-
+function buildTranscriptHtml(chunks){
   if (!chunks || !chunks.length) {
-    const p = document.createElement('p');
-    p.style.color = 'var(--muted)';
-    p.textContent = 'No transcript available.';
-    fragment.appendChild(p);
-    return { fragment, meta };
+    return {
+      html: '<p style="color:var(--muted)">No transcript available.</p>',
+      chunks: []
+    };
   }
-
-  chunks.forEach((chunk, idx) => {
-    const p = document.createElement('p');
-    p.className = 'transcript-paragraph';
-    p.dataset.transcriptChunk = idx;
-
-    const span = document.createElement('span');
-    span.className = 'transcript-chunk';
-    span.dataset.transcriptChunk = idx;
-    span.textContent = chunk;
-    p.appendChild(span);
-
-    fragment.appendChild(p);
-
-    if (track) {
-      const canonical = canonicalCueString(chunk);
-      const words = canonical.split(/\s+/).filter(Boolean);
-      const tokens = tokenizeTranscriptChunk(chunk);
-      meta.push({
-        canonical,
-        words,
-        tokens,
-        element: span,
-        originalHtml: span.innerHTML,
-        paragraph: p,
-        text: chunk
-      });
-    }
-  });
-
-  return { fragment, meta };
+  const html = chunks
+    .map((chunk, idx) => `<p class="transcript-paragraph" data-transcript-chunk="${idx}"><span class="transcript-chunk" data-transcript-chunk="${idx}">${escapeHtml(chunk)}</span></p>`)
+    .join('');
+  return { html, chunks };
 }
 
 function renderTranscriptInto(el, raw, { track = false } = {}){
   if (!el) return [];
-  const chunks = splitTranscriptChunks(raw);
-  const { fragment, meta } = buildTranscriptDom(chunks, { track });
-  el.innerHTML = '';
-  el.appendChild(fragment);
+  const { html, chunks } = buildTranscriptHtml(splitTranscriptChunks(raw));
+  el.innerHTML = html;
   if (track) {
     trackedTranscriptElement = el;
-    currentTranscriptChunkMeta = meta;
+    currentTranscriptChunkMeta = chunks.map((chunk) => {
+      const canonical = canonicalCueString(chunk);
+      return {
+        canonical,
+        words: canonical.split(/\s+/).filter(Boolean)
+      };
+    });
     lastHighlightedChunk = -1;
     clearTranscriptHighlight();
     if (lastCueRawText) {
@@ -381,19 +335,9 @@ function canonicalCueString(str){
 }
 
 function clearTranscriptHighlight(){
-  if (!trackedTranscriptElement || !currentTranscriptChunkMeta.length) {
-    lastHighlightedChunk = -1;
-    return;
-  }
-  currentTranscriptChunkMeta.forEach((meta) => {
-    if (!meta?.element) return;
-    if (meta.element.innerHTML !== meta.originalHtml) {
-      meta.element.innerHTML = meta.originalHtml;
-    }
-    meta.element.classList.remove('is-active');
-    if (meta.paragraph) {
-      meta.paragraph.classList.remove('is-active');
-    }
+  if (!trackedTranscriptElement) return;
+  trackedTranscriptElement.querySelectorAll('.transcript-chunk.is-active').forEach((node) => {
+    node.classList.remove('is-active');
   });
   lastHighlightedChunk = -1;
 }
@@ -415,57 +359,14 @@ function ensureChunkVisible(el){
   }
 }
 
-function buildChunkHighlightHtml(meta, canonicalCue, cueWords){
-  if (!meta || !meta.tokens || !meta.tokens.length) return meta?.originalHtml || '';
-  const counts = new Map();
-  cueWords.forEach((word) => {
-    if (!word) return;
-    counts.set(word, (counts.get(word) || 0) + 1);
-  });
-  let matched = 0;
-  const parts = meta.tokens.map((token) => {
-    if (!token) return '';
-    if (token.isWhitespace || !token.canonical) {
-      return escapeHtml(token.text);
-    }
-    const canonical = token.canonical;
-    const available = counts.get(canonical) || 0;
-    if (available > 0) {
-      counts.set(canonical, available - 1);
-      matched++;
-      return `<span class="transcript-highlight">${escapeHtml(token.text)}</span>`;
-    }
-    return escapeHtml(token.text);
-  });
-
-  if (!matched) {
-    if (canonicalCue && (meta.canonical === canonicalCue || meta.canonical.includes(canonicalCue) || canonicalCue.includes(meta.canonical))) {
-      return `<span class="transcript-highlight">${escapeHtml(meta.text)}</span>`;
-    }
-  }
-
-  return parts.join('');
-}
-
-function applyActiveChunk(index, canonicalCue, cueWords){
-  currentTranscriptChunkMeta.forEach((meta, idx) => {
-    if (!meta?.element) return;
-    const isActive = Number.isFinite(index) && idx === index;
-    if (isActive) {
-      const html = buildChunkHighlightHtml(meta, canonicalCue, cueWords);
-      if (meta.element.innerHTML !== html) {
-        meta.element.innerHTML = html;
-      }
-      meta.element.classList.add('is-active');
-      if (meta.paragraph) meta.paragraph.classList.add('is-active');
-      ensureChunkVisible(meta.paragraph || meta.element);
-    } else {
-      if (meta.element.innerHTML !== meta.originalHtml) {
-        meta.element.innerHTML = meta.originalHtml;
-      }
-      meta.element.classList.remove('is-active');
-      if (meta.paragraph) meta.paragraph.classList.remove('is-active');
-    }
+function setActiveChunk(index){
+  if (!trackedTranscriptElement) return;
+  const nodes = trackedTranscriptElement.querySelectorAll('.transcript-chunk');
+  nodes.forEach((node) => {
+    const nodeIndex = Number(node.dataset.transcriptChunk);
+    const active = Number.isFinite(index) && nodeIndex === index;
+    node.classList.toggle('is-active', active);
+    if (active) ensureChunkVisible(node.closest('p') || node);
   });
   lastHighlightedChunk = index;
 }
@@ -516,7 +417,9 @@ function highlightTranscriptCue(rawText){
     return;
   }
 
-  applyActiveChunk(bestIndex, canonicalCue, cueWords);
+  if (bestIndex !== lastHighlightedChunk) {
+    setActiveChunk(bestIndex);
+  }
 }
 
 function extractCueText(evt){
