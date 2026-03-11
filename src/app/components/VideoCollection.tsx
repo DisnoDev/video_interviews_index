@@ -115,8 +115,40 @@ export function VideoCollection({
     syncRoute(record.slug, collectionFromUrl);
   };
 
+  const toggleAuthorFilter = (author: string) => {
+    setSelectedAuthor((current) => current === author ? null : author);
+  };
+
+  const toggleTitleFilter = (title: string) => {
+    setSearchQuery((current) => current === title ? '' : title);
+  };
+
+  const toggleCategoryFilter = (category: string) => {
+    syncRoute(selectedRecord?.slug || null, collectionFromUrl === category ? '' : category);
+  };
+
   return (
     <div className={`flex ${layoutMode === 'side' ? 'flex-row h-screen' : 'flex-col'} overflow-hidden`}>
+      <div className="fixed top-4 right-4 z-30 flex items-center gap-2">
+        <button
+          onClick={() => setLayoutMode(layoutMode === 'side' ? 'stacked' : 'side')}
+          className="p-2 text-black dark:text-white hover:opacity-60 transition-opacity bg-white/70 dark:bg-black/70 backdrop-blur-sm rounded-full"
+          aria-label="Toggle layout"
+          type="button"
+        >
+          {layoutMode === 'side' ? <Rows className="w-5 h-5" /> : <Columns className="w-5 h-5" />}
+        </button>
+
+        <button
+          onClick={() => setIsDarkMode(!isDarkMode)}
+          className="p-2 text-black dark:text-white hover:opacity-60 transition-opacity bg-white/70 dark:bg-black/70 backdrop-blur-sm rounded-full"
+          aria-label="Toggle dark mode"
+          type="button"
+        >
+          {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+        </button>
+      </div>
+
       {layoutMode === 'stacked' && (
         <div className="w-full h-1/2 fixed top-0 left-0 right-0 overflow-y-auto border-b border-black dark:border-white bg-white dark:bg-black z-10">
           {selectedRecord ? (
@@ -127,6 +159,9 @@ export function VideoCollection({
               audioMode={audioMode}
               onAudioModeChange={setAudioMode}
               onKeywordClick={(keyword) => setSelectedKeyword(keyword)}
+              onAuthorClick={toggleAuthorFilter}
+              onTitleClick={toggleTitleFilter}
+              onCategoryClick={toggleCategoryFilter}
             />
           ) : (
             <EmptyState loading={loading} error={error} retry={retry} uiLanguage={preferredLanguage} />
@@ -142,26 +177,6 @@ export function VideoCollection({
               <p className="text-sm md:text-base text-neutral-600 dark:text-neutral-400 max-w-xl">
                 {t(preferredLanguage, 'intro')}
               </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setLayoutMode(layoutMode === 'side' ? 'stacked' : 'side')}
-                className="p-2 text-black dark:text-white hover:opacity-60 transition-opacity"
-                aria-label="Toggle layout"
-                type="button"
-              >
-                {layoutMode === 'side' ? <Rows className="w-5 h-5" /> : <Columns className="w-5 h-5" />}
-              </button>
-
-              <button
-                onClick={() => setIsDarkMode(!isDarkMode)}
-                className="p-2 text-black dark:text-white hover:opacity-60 transition-opacity"
-                aria-label="Toggle dark mode"
-                type="button"
-              >
-                {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
             </div>
           </header>
 
@@ -312,7 +327,7 @@ export function VideoCollection({
                 showAuthor={showAuthor}
                 showTags={showTags}
                 showCategory={showCategory}
-                onAuthorClick={(author) => setSelectedAuthor((current) => current === author ? null : author)}
+                onAuthorClick={toggleAuthorFilter}
                 selectedAuthor={selectedAuthor}
                 onSelectVideo={handleVideoSelect}
               />
@@ -335,6 +350,9 @@ export function VideoCollection({
               audioMode={audioMode}
               onAudioModeChange={setAudioMode}
               onKeywordClick={(keyword) => setSelectedKeyword(keyword)}
+              onAuthorClick={toggleAuthorFilter}
+              onTitleClick={toggleTitleFilter}
+              onCategoryClick={toggleCategoryFilter}
             />
           ) : (
             <EmptyState loading={loading} error={error} retry={retry} uiLanguage={preferredLanguage} />

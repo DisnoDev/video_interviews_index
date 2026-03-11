@@ -6,7 +6,24 @@ import { VideoCollection } from './VideoCollection';
 import { makeSampleRecords } from '../test/fixtures';
 
 vi.mock('./VideoPlayer', () => ({
-  VideoPlayer: ({ record }: { record: { slug: string } }) => <div data-testid="player">player:{record.slug}</div>,
+  VideoPlayer: ({
+    record,
+    onAuthorClick,
+    onTitleClick,
+    onCategoryClick,
+  }: {
+    record: { slug: string; author: string; collection: string; title: string };
+    onAuthorClick?: (value: string) => void;
+    onTitleClick?: (value: string) => void;
+    onCategoryClick?: (value: string) => void;
+  }) => (
+    <div data-testid="player">
+      <div>{`player:${record.slug}`}</div>
+      <button type="button" onClick={() => onAuthorClick?.(record.author)}>filter-author</button>
+      <button type="button" onClick={() => onTitleClick?.(record.title)}>filter-title</button>
+      <button type="button" onClick={() => onCategoryClick?.(record.collection)}>filter-category</button>
+    </div>
+  ),
 }));
 
 describe('VideoCollection', () => {
@@ -16,8 +33,7 @@ describe('VideoCollection', () => {
     render(
       <MemoryRouter initialEntries={[`/${records[0].slug}`]}>
         <Routes>
-          <Route path="/" element={<Harness records={records} />} />
-          <Route path="/:slug" element={<Harness records={records} />} />
+          <Route path="/:slug?" element={<Harness records={records} />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -32,8 +48,7 @@ describe('VideoCollection', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <Routes>
-          <Route path="/" element={<Harness records={records} />} />
-          <Route path="/:slug" element={<Harness records={records} />} />
+          <Route path="/:slug?" element={<Harness records={records} />} />
         </Routes>
       </MemoryRouter>,
     );
@@ -41,6 +56,29 @@ describe('VideoCollection', () => {
     await user.click(screen.getAllByText('Repair')[0]);
 
     expect(screen.getByTestId('player')).toHaveTextContent(`player:${records[1].slug}`);
+  });
+
+  it('applies dynamic metadata filters from the player', async () => {
+    const records = makeSampleRecords();
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={[`/${records[0].slug}`]}>
+        <Routes>
+          <Route path="/:slug?" element={<Harness records={records} />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getAllByRole('button', { name: 'filter-author' })[0]);
+    expect(screen.getByText(/Author:/)).toBeInTheDocument();
+    expect(screen.getAllByText(records[0].author).length).toBeGreaterThan(0);
+
+    await user.click(screen.getAllByRole('button', { name: 'filter-title' })[0]);
+    expect(screen.getAllByPlaceholderText('Search... concept, person, keywords...').some((input) => (input as HTMLInputElement).value.length > 0)).toBe(true);
+
+    await user.click(screen.getAllByRole('button', { name: 'filter-category' })[0]);
+    expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value.length).toBeGreaterThan(0);
   });
 });
 

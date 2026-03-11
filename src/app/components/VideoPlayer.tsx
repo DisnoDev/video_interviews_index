@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, FileText, Headphones } from 'lucide-react';
 import { TranscriptModal } from './TranscriptModal';
 import { exportTranscriptPdf } from '../lib/pdf';
+import { t } from '../lib/i18n';
 import { languageLabel, normalizeLanguageCode, transcriptInfoFromRecordLike } from '../lib/languages';
-import { getPreferredAuthor, getPreferredCollection, getPreferredConcept, getPreferredKeywords } from '../lib/records';
+import { getPreferredAuthor, getPreferredCollection, getPreferredConcept, getPreferredKeywords, getPreferredTitle } from '../lib/records';
 import { downloadTextFile, formatTranscriptParagraphs } from '../lib/utils';
 import type { InterviewRecord, LayoutMode } from '../types';
 
@@ -65,6 +66,9 @@ interface VideoPlayerProps {
   audioMode: boolean;
   onAudioModeChange: (value: boolean) => void;
   onKeywordClick?: (keyword: string) => void;
+  onAuthorClick?: (author: string) => void;
+  onTitleClick?: (title: string) => void;
+  onCategoryClick?: (category: string) => void;
 }
 
 const vimeoSdkPromise = new Promise<void>((resolve, reject) => {
@@ -81,7 +85,17 @@ const vimeoSdkPromise = new Promise<void>((resolve, reject) => {
   document.head.appendChild(script);
 });
 
-export function VideoPlayer({ record, preferredLanguage, layoutMode = 'side', audioMode, onAudioModeChange, onKeywordClick }: VideoPlayerProps) {
+export function VideoPlayer({
+  record,
+  preferredLanguage,
+  layoutMode = 'side',
+  audioMode,
+  onAudioModeChange,
+  onKeywordClick,
+  onAuthorClick,
+  onTitleClick,
+  onCategoryClick,
+}: VideoPlayerProps) {
   const playerHostRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<VimeoPlayer | null>(null);
   const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
@@ -96,6 +110,7 @@ export function VideoPlayer({ record, preferredLanguage, layoutMode = 'side', au
   const [highlight, setHighlight] = useState<HighlightRange | null>(null);
 
   const concept = getPreferredConcept(record, preferredLanguage);
+  const title = getPreferredTitle(record, preferredLanguage);
   const author = getPreferredAuthor(record, preferredLanguage);
   const collection = getPreferredCollection(record, preferredLanguage);
   const keywords = getPreferredKeywords(record, preferredLanguage);
@@ -104,6 +119,7 @@ export function VideoPlayer({ record, preferredLanguage, layoutMode = 'side', au
     [record, preferredLanguage, subtitleOverride, activeSubtitle],
   );
   const transcriptChunks = useMemo(() => prepareTranscriptChunks(transcriptInfo.text), [transcriptInfo.text]);
+  const isSideLayout = layoutMode === 'side';
 
   useEffect(() => {
     setSubtitleOverride(null);
@@ -205,16 +221,22 @@ export function VideoPlayer({ record, preferredLanguage, layoutMode = 'side', au
     downloadTextFile(`${concept} - disnovation.txt`, transcriptInfo.text);
   };
 
+  const clickableMetaClass = 'cursor-pointer underline-offset-4 hover:underline hover:opacity-60 transition-opacity';
+
   return (
     <>
-      <div className={`h-full flex ${layoutMode === 'side' ? 'flex-col' : 'flex-row'}`}>
-        <div className={`${layoutMode === 'side' ? 'w-full' : 'w-2/3'} flex items-center justify-center bg-black p-4 md:p-6`}>
+      <div className={`h-full flex ${isSideLayout ? 'flex-col' : 'flex-row'}`}>
+        <div className={`${isSideLayout ? 'w-full flex-1 min-h-0' : 'w-2/3'} flex items-center justify-center bg-black p-2 md:p-4`}>
           {audioMode ? (
             <div className="w-full h-full border border-white/15 text-white p-4 md:p-6 flex flex-col">
               <div className="flex items-center justify-between gap-4 mb-4">
                 <div>
-                  <h3 className="text-xl md:text-2xl mb-1">{concept}</h3>
-                  <p className="text-sm text-white/70">{author}</p>
+                  <button type="button" onClick={() => onTitleClick?.(title || concept)} className="text-left">
+                    <h3 className={`text-xl md:text-2xl mb-1 ${clickableMetaClass}`}>{concept}</h3>
+                  </button>
+                  <button type="button" onClick={() => onAuthorClick?.(record.author)} className={`text-sm text-white/70 ${clickableMetaClass}`}>
+                    {author}
+                  </button>
                 </div>
                 <button
                   type="button"
@@ -226,11 +248,11 @@ export function VideoPlayer({ record, preferredLanguage, layoutMode = 'side', au
               </div>
               <div className="flex items-center gap-4 text-sm mb-4 text-white/80">
                 <label className="flex items-center gap-2">
-                  <span>Auto-scroll</span>
+                  <span>{t(preferredLanguage, 'audioAutoScroll')}</span>
                   <input type="checkbox" checked={autoScroll} onChange={(event) => setAutoScroll(event.target.checked)} />
                 </label>
                 <label className="flex items-center gap-3">
-                  <span>Speed</span>
+                  <span>{t(preferredLanguage, 'audioSpeed')}</span>
                   <input type="range" min="0.5" max="2" step="0.1" value={playbackRate} onChange={(event) => setPlaybackRate(Number(event.target.value))} />
                   <span>{playbackRate.toFixed(1)}x</span>
                 </label>
@@ -240,44 +262,59 @@ export function VideoPlayer({ record, preferredLanguage, layoutMode = 'side', au
               </div>
             </div>
           ) : (
-            <div className="w-full aspect-video">
+            <div className={`${isSideLayout ? 'w-full h-full' : 'w-full aspect-video'} flex items-center justify-center`}>
               <div ref={playerHostRef} className="w-full h-full" />
             </div>
           )}
         </div>
 
-        <div className={`${layoutMode === 'side' ? 'w-full' : 'w-1/3'} p-4 md:p-6 overflow-y-auto`}>
+        <div className={`${isSideLayout ? 'w-full shrink-0' : 'w-1/3'} p-4 md:p-6 border-t border-neutral-200 dark:border-neutral-800`}>
           <div className="space-y-4">
             <div>
-              <h2 className="text-2xl md:text-3xl mb-1 text-black dark:text-white">{concept}</h2>
-              <p className="text-base md:text-lg text-black dark:text-white opacity-70">{author}</p>
+              <button type="button" onClick={() => onTitleClick?.(title || concept)} className="text-left">
+                <h2 className={`text-2xl md:text-3xl mb-1 text-black dark:text-white ${clickableMetaClass}`}>{concept}</h2>
+              </button>
+              <button type="button" onClick={() => onAuthorClick?.(record.author)} className={`text-base md:text-lg text-black dark:text-white opacity-70 ${clickableMetaClass}`}>
+                {author}
+              </button>
             </div>
 
             <div className="space-y-3 text-base">
+              {title && title !== concept && (
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">{t(preferredLanguage, 'title')}</div>
+                  <button type="button" onClick={() => onTitleClick?.(title)} className={`text-black dark:text-white text-left ${clickableMetaClass}`}>
+                    {title}
+                  </button>
+                </div>
+              )}
+
               <div>
-                <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">Concept</div>
-                <div className="text-black dark:text-white">{collection}</div>
+                <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">{t(preferredLanguage, 'collection')}</div>
+                <button type="button" onClick={() => onCategoryClick?.(record.collection)} className={`text-black dark:text-white text-left ${clickableMetaClass}`}>
+                  {collection}
+                </button>
               </div>
 
               <div>
-                <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">Duration</div>
+                <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">{t(preferredLanguage, 'duration')}</div>
                 <div className="text-black dark:text-white">{record.durationLabel || '-'}</div>
               </div>
 
               <div>
-                <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">Language</div>
+                <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">{t(preferredLanguage, 'language')}</div>
                 <div className="text-black dark:text-white">{transcriptInfo.label || languageLabel(preferredLanguage || activeSubtitle || 'en', 'Auto')}</div>
               </div>
 
               <div>
-                <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">Subtitles</div>
+                <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">{t(preferredLanguage, 'subtitles')}</div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setSubtitleOverride(null)}
                     className={`text-sm px-2 py-1 border border-black dark:border-white hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-colors cursor-pointer ${!subtitleOverride ? 'bg-black text-white dark:bg-white dark:text-black' : 'text-black dark:text-white'}`}
                   >
-                    Auto
+                    {t(preferredLanguage, 'auto')}
                   </button>
                   {record.subtitles.map((subtitle) => {
                     const code = normalizeLanguageCode(subtitle.code || subtitle.label);
@@ -298,7 +335,7 @@ export function VideoPlayer({ record, preferredLanguage, layoutMode = 'side', au
 
               {keywords.length > 0 && (
                 <div>
-                  <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">Keywords</div>
+                  <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">{t(preferredLanguage, 'keywords')}</div>
                   <div className="flex flex-wrap gap-2">
                     {keywords.map((keyword) => (
                       <button
@@ -316,7 +353,7 @@ export function VideoPlayer({ record, preferredLanguage, layoutMode = 'side', au
 
               {transcriptInfo.text && (
                 <div>
-                  <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">Transcript</div>
+                  <div className="text-xs uppercase tracking-wider text-neutral-500 dark:text-neutral-500 mb-1">{t(preferredLanguage, 'transcript')}</div>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -481,12 +518,12 @@ function canonicalWord(value: string): string {
 
 function tokenizeChunkText(text: string): Array<Omit<TranscriptToken, 'wordIndex'>> {
   const tokens: Array<Omit<TranscriptToken, 'wordIndex'>> = [];
-  const regex = /([\p{L}\p{N}'’]+|\s+|[^\s\p{L}\p{N}'’])/gu;
+  const regex = /([\p{L}\p{N}'ï¿½]+|\s+|[^\s\p{L}\p{N}'ï¿½])/gu;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
     const raw = match[0];
-    const isWord = /[\p{L}\p{N}'’]/u.test(raw) && !/^\s+$/.test(raw);
+    const isWord = /[\p{L}\p{N}'ï¿½]/u.test(raw) && !/^\s+$/.test(raw);
     tokens.push({ text: raw, isWord, canonical: isWord ? canonicalWord(raw) : '' });
   }
 
