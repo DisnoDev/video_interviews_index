@@ -140,6 +140,69 @@ function renderKeywords(str){
   return `<div class="kw-wrap">${chips}</div>`;
 }
 
+function normalizeSearchText(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    return raw
+      .normalize('NFD')
+      .replace(/\p{M}+/gu, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  } catch {
+    return raw.toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+}
+
+function getSearchableValues(row) {
+  if (!row || typeof row !== 'object') return [];
+
+  const values = [
+    row['Notion'],
+    row['Interviewee name'],
+    row['Title'],
+    row['Keywords'],
+    row['Collection'],
+    row['Year'],
+    row['Language'],
+    row['Subtitles'],
+    row['AVAILABLE_LANGS'],
+    row['ONLY_LANGS']
+  ];
+
+  Object.entries(row).forEach(([key, value]) => {
+    if (!value) return;
+    if (
+      key.startsWith('Notion_') ||
+      key.startsWith('Title_') ||
+      key.startsWith('Keywords_') ||
+      key.startsWith('Interviewee name_') ||
+      key.startsWith('Collection_') ||
+      key.startsWith('Transcript_')
+    ) {
+      values.push(value);
+    }
+  });
+
+  return values;
+}
+
+function getRowSearchIndex(row) {
+  if (!row || typeof row !== 'object') return '';
+  if (typeof row.__searchIndex === 'string') return row.__searchIndex;
+  row.__searchIndex = normalizeSearchText(getSearchableValues(row).join(' '));
+  return row.__searchIndex;
+}
+
+function matchesSearchQuery(row, query) {
+  if (!query) return true;
+  const tokens = normalizeSearchText(query).split(/\s+/).filter(Boolean);
+  if (!tokens.length) return true;
+  const haystack = getRowSearchIndex(row);
+  return tokens.every((token) => haystack.includes(token));
+}
+
 function preferredNotion(row) {
   const pref = getPrefLang();
   if (pref) {
@@ -197,7 +260,7 @@ function showHover(e, vid, notion, person){
 function hideHover(){ hoverId=''; hoverCard.style.display='none'; }
 
 export function applyFilters(){
-  const q = ($('#search').value || '').trim().toLowerCase();
+  const q = ($('#search').value || '').trim();
   const hasQuery = !!q;
   FILTERED = DATA.filter(r=>{
     if (collectionFilterKey) {
@@ -205,8 +268,7 @@ export function applyFilters(){
       if (rowKey !== collectionFilterKey) return false;
     }
     if (!hasQuery) return true;
-    const hay=[r['Notion'], r['Interviewee name'], r['Title'], r['Keywords'], r['Collection'], r['Year']].join(' ').toLowerCase();
-    return hay.includes(q);
+    return matchesSearchQuery(r, q);
   });
 
 
