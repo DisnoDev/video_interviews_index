@@ -1,12 +1,13 @@
 // Ensure the modal is closed when the page loads
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('modal')?.classList.remove('open');
-  try { localStorage.setItem('pg_audio_mode', '0'); document.body.classList.remove('audio-mode'); } catch {}
+  setAudioMode(false); document.body.classList.remove('audio-mode');
 });
 
 
 import { loadRecords } from './assets/js/sheets.js';
 import { $, $$ } from './assets/js/utils.js';
+import { setAudioMode } from './assets/js/prefs.js';
 import { DATA, FILTERED, setSort, bindSorting, renderTable, applyFilters, bindRowInteractions, rerenderCurrent } from './assets/js/table.js';
 import { bindPlayer } from './assets/js/player-module.js';
 import { bindTranscript } from './assets/js/transcript.js';
@@ -31,22 +32,31 @@ async function init(){
 
     // 🔄 Re-render Concept column on language change
     document.addEventListener('subtitle:pref-changed', () => {
-      rerenderCurrent();
+      try { rerenderCurrent(); } catch (err) { console.warn('subtitle:pref-changed re-render failed', err); }
     });
 
 
     const records = await loadRecords();
-    // set module-level DATA (mutable export in table.js)
-    // eslint-disable-next-line no-import-assign
-    // after: const records = await loadRecords();
     DATA.splice(0, DATA.length, ...records);
+    const loadingEl = document.getElementById('loadingIndicator');
+    if (loadingEl) loadingEl.remove();
     refreshCollectionFilterOptions();
     const appliedFromUrl = applyCollectionFilterFromUrl();
     if (!appliedFromUrl) applyFilters();
 
   } catch (err){
     console.error(err);
-    alert('Failed to load data from Google Sheets. Make sure the sheet is published or shared publicly.');
+    const loadingEl = document.getElementById('loadingIndicator');
+    if (loadingEl) {
+      loadingEl.innerHTML = `
+        <p>Could not load data. <button id="retryLoad" class="pill" type="button">Retry</button></p>
+        <p style="font-size:0.8em;color:var(--muted)">${err.message || 'Unknown error'}</p>
+      `;
+      document.getElementById('retryLoad')?.addEventListener('click', () => {
+        loadingEl.textContent = 'Retrying...';
+        init();
+      });
+    }
   }
 }
 init();

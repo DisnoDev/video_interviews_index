@@ -1,9 +1,10 @@
 // assets/js/player-module.js
-import { $, extractVimeoId, escapeHtml } from './utils.js';
+import { $, extractVimeoId, escapeHtml, trapFocus, computeLateStart } from './utils.js';
 import { indexOfIdInFiltered, nextPlayableIdFromFiltered, FILTERED } from './table.js';
 import { isAutoplayEnabled, isAutoplaySessionActive, setAutoplaySessionActive, isAudioMode } from './toolbar.js';
 import { closeTranscriptModal } from './transcript.js';
 import { getTranscriptForRow, getSubtitleOptionsForRow, languageLabel, normalizeLanguageCode } from './lang.js';
+import { getPrefLang, getAudioMode } from './prefs.js';
 
 /* ---------------------------
    Modal-scoped element helpers
@@ -36,17 +37,24 @@ let currentId = null;
 let currentSubtitleActive = '';
 const subtitleButtonMap = new Map();
 let currentSubtitleOptions = [];
-let ignoreNextTextTrackChange = false;
-
 // sequence guards
+let openSeq = 0;
 let transcriptSeq = 0;
 let currentRecordId = null;
 let pendingPlayForId = null;
+let pendingOpenSeq = 0;
 let pendingStartAt = 0;
 
 // auto-scroll state
 let autoScrollReq = null, autoScrollStart = 0, autoScrollFrom = 0, autoScrollTo = 0, autoScrollDur = 0;
-function cancelAutoScroll(){ if (autoScrollReq) { cancelAnimationFrame(autoScrollReq); autoScrollReq = null; } }
+let orientationHandler = null;
+function cancelAutoScroll(){
+  if (autoScrollReq) { cancelAnimationFrame(autoScrollReq); autoScrollReq = null; }
+  if (orientationHandler) { window.removeEventListener('resize', orientationHandler); orientationHandler = null; }
+}
+
+// Focus trap release function
+let releaseFocusTrap = null;
 
 // Transcript highlight tracking
 let trackedTranscriptElement = null;
@@ -63,11 +71,7 @@ function canonicalLangCode(value){
 }
 
 function getStoredPrefLang(){
-  try {
-    return (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
-  } catch {
-    return '';
-  }
+  return getPrefLang();
 }
 
 function setActiveSubtitleLanguage(lang){
@@ -147,14 +151,6 @@ function updateSubtitleButtonsForRecord(rec){
   reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
 }
 
-function computeLateStart(val){
-  const norm = String(val || '').trim();
-  if (!norm) return 0;
-  if (/^(1|true|yes)$/i.test(norm)) return 4;
-  const num = Number(norm);
-  return Number.isFinite(num) && num > 0 ? num : 0;
-}
-
 function startOffsetForIndex(idx){
   if (!FILTERED || idx < 0 || idx >= FILTERED.length) return 0;
   return computeLateStart(FILTERED[idx]?.['Late_4s']);
@@ -191,11 +187,14 @@ function normalizeTrackLanguage(track){
 }
 
 async function applyPreferredTextTrack(p, opts = {}) {
+  const callerSeq = openSeq;
   try {
     const override = canonicalLangCode(opts?.override);
     const pref = override || getStoredPrefLang();
     for (let attempt = 0; attempt < 5; attempt++) {
+      if (callerSeq !== openSeq) return '';
       const tracks = await p.getTextTracks();
+      if (callerSeq !== openSeq) return '';
       if (tracks && tracks.length) {
         const normalizedTracks = tracks.map((track) => ({
           raw: track,
@@ -223,13 +222,8 @@ async function applyPreferredTextTrack(p, opts = {}) {
         if (choice && choice.raw) {
           const langToEnable = choice.raw.language || choice.code || pref || 'en';
           const kind = choice.raw.kind || 'subtitles';
-          ignoreNextTextTrackChange = true;
-          try {
-            await p.enableTextTrack(langToEnable, kind);
-          } catch (err) {
-            ignoreNextTextTrackChange = false;
-            throw err;
-          }
+          await p.enableTextTrack(langToEnable, kind);
+          if (callerSeq !== openSeq) return '';
           setActiveSubtitleLanguage(choice.code || langToEnable);
           return choice.code || normalizeLanguageCode(langToEnable) || '';
         }
@@ -239,7 +233,7 @@ async function applyPreferredTextTrack(p, opts = {}) {
   } catch (err) {
     console.warn('applyPreferredTextTrack failed', err);
   }
-  setActiveSubtitleLanguage('');
+  if (callerSeq === openSeq) setActiveSubtitleLanguage('');
   return '';
 }
 
@@ -701,6 +695,13 @@ async function prepareAudioScreenForIndex(idx, opts = {}){
   autoScrollFrom = 0; autoScrollTo = scrollArea; autoScrollDur = (dur * 1000) / (speed || 1);
   if (audioAutoScrollEl?.checked) {
     autoScrollStart = performance.now();
+    // Recalculate scroll target on resize/orientation change
+    orientationHandler = () => {
+      if (!autoScrollReq || !audioTranscript) return;
+      const newArea = audioTranscript.scrollHeight - audioTranscript.clientHeight;
+      if (newArea > 0) autoScrollTo = newArea;
+    };
+    window.addEventListener('resize', orientationHandler, { passive: true });
     const step = (t) => {
       const k = Math.min(1, (t - autoScrollStart) / autoScrollDur);
       audioTranscript.scrollTop = autoScrollFrom + (autoScrollTo - autoScrollFrom) * k;
@@ -711,7 +712,7 @@ async function prepareAudioScreenForIndex(idx, opts = {}){
 }
 
 async function afterVideoLoaded(){
-  const on = localStorage.getItem('pg_audio_mode') === '1';
+  const on = getAudioMode();
   if (on) {
     document.body.classList.add('audio-mode');
     if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
@@ -749,11 +750,14 @@ async function ensurePlayer(initId) {
 
     // events
     player.on('loaded', async () => {
-      const id = pendingPlayForId;
+      const expectedSeq = pendingOpenSeq;
       pendingPlayForId = null;
+      if (expectedSeq !== openSeq) return;
       try {
         await player.play().catch(()=>{});
+        if (expectedSeq !== openSeq) return;
         await applyPreferredTextTrack(player);
+        if (expectedSeq !== openSeq) return;
         await afterVideoLoaded();
       } catch {}
     });
@@ -763,38 +767,40 @@ async function ensurePlayer(initId) {
     });
 
     player.on('texttrackchange', async (data) => {
+      const capturedSeq = openSeq;
       const langRaw = data?.language || data?.track?.language || '';
       const normalized = canonicalLangCode(langRaw);
       const activeValue = normalized || (langRaw === '' ? '' : langRaw);
       setActiveSubtitleLanguage(activeValue);
+      reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
 
-      if (ignoreNextTextTrackChange) {
-        ignoreNextTextTrackChange = false;
-        reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
-      } else {
-        reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
-      }
-
+      if (capturedSeq !== openSeq) return;
       if (currentId) await setTranscriptFor(currentId);
+      if (capturedSeq !== openSeq) return;
       if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
     });
 
     player.on('cuechange', (evt) => {
+      if (!currentId) return;
       highlightTranscriptCue(extractCueText(evt));
     });
 
     player.on('ended', async () => {
       if (!isAutoplayEnabled() || !isAutoplaySessionActive()) return;
+      const seq = ++openSeq;
       const next = nextPlayableIdFromFiltered(currentIndex);
       if (next && next.id) {
         currentIndex = next.index; currentId = String(next.id);
         pendingStartAt = startOffsetForIndex(currentIndex);
         await setTranscriptFor(currentId);
+        if (seq !== openSeq) return;
         applyAudioUi(currentId);
         try {
           pendingPlayForId = currentId;
+          pendingOpenSeq = seq;
           await player.loadVideo(videoLoadOptions(currentId, pendingStartAt));
         } catch (e) {
+          if (seq !== openSeq) return;
           console.warn('Autoplay-next failed:', e);
         }
       } else {
@@ -813,6 +819,7 @@ async function ensurePlayer(initId) {
 ---------------------------- */
 export async function openPlayer(id, opts = {}) {
   if (!id) return;
+  const seq = ++openSeq;
   closeTranscriptModal?.();
 
   const cleanId = /^\d+$/.test(String(id)) ? String(id) : extractVimeoId(String(id));
@@ -829,23 +836,29 @@ export async function openPlayer(id, opts = {}) {
 
   // 1) Update transcript immediately in the MODAL
   await setTranscriptFor(cleanId);
+  if (seq !== openSeq) return;
 
   // 2) OPEN modal first so layout exists (prevents 0×0 iframes)
   setAutoplaySessionActive(true);
   modal?.classList.add('open');
+  if (modal) releaseFocusTrap = trapFocus(modal);
   onOpenModalEnsureUiState();
   applyAudioUi(cleanId);
 
   // 3) Let the browser paint (two frames for safety)
   await new Promise(requestAnimationFrame);
   await new Promise(requestAnimationFrame);
+  if (seq !== openSeq) return;
 
   // 4) Init player & load video (auto-play on 'loaded')
   try {
     const p = await ensurePlayer(cleanId);
+    if (seq !== openSeq) return;
     pendingPlayForId = cleanId;
+    pendingOpenSeq = seq;
     await p.loadVideo(videoLoadOptions(cleanId, pendingStartAt));
   } catch (e) {
+    if (seq !== openSeq) return;
     console.warn('Could not start playback:', e);
     modal?.classList.remove('open');
     setAutoplaySessionActive(false);
@@ -853,6 +866,8 @@ export async function openPlayer(id, opts = {}) {
 }
 
 function close() {
+  openSeq++;
+  if (releaseFocusTrap) { releaseFocusTrap(); releaseFocusTrap = null; }
   modal?.classList.remove('open');
   setAutoplaySessionActive(false);
   cancelAutoScroll();
@@ -889,10 +904,14 @@ export function bindPlayer() {
 
   // Subtitle preference change
   document.addEventListener('subtitle:pref-changed', async () => {
-    reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
-    if (player) await applyPreferredTextTrack(player);
-    if (currentId) await setTranscriptFor(currentId);
-    if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
+    try {
+      reflectSubtitleButtons(currentSubtitleActive, getStoredPrefLang());
+      if (player) await applyPreferredTextTrack(player);
+      if (currentId) await setTranscriptFor(currentId);
+      if (currentIndex >= 0) await prepareAudioScreenForIndex(currentIndex);
+    } catch (err) {
+      console.warn('subtitle:pref-changed handler failed in player-module', err);
+    }
   });
 
   // Audio-mode toggle handling

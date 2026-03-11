@@ -1,4 +1,5 @@
-import { $, $$, escapeHtml, escapeAttr, durationFmt, extractVimeoId, vimeoThumbUrl, cmp } from './utils.js';
+import { $, $$, escapeHtml, escapeAttr, durationFmt, extractVimeoId, vimeoThumbUrl, cmp, debounce, computeLateStart } from './utils.js';
+import { getPrefLang } from './prefs.js';
 
 export let DATA = [];
 export let FILTERED = [];
@@ -92,15 +93,7 @@ export function renderTable(rows){
     const keywords=row['Keywords']||'';
     const link=row['Link']||'';
     const title=row['Title']||'';
-    const lateRaw = String(row['Late_4s'] ?? '').trim();
-    let startAt = 0;
-    if (lateRaw) {
-      if (/^(1|true|yes)$/i.test(lateRaw)) startAt = 4;
-      else {
-        const lateNum = Number(lateRaw);
-        if (Number.isFinite(lateNum) && lateNum > 0) startAt = lateNum;
-      }
-    }
+    const startAt = computeLateStart(row['Late_4s']);
     const vid = extractVimeoId(link);
     tr.dataset.id = vid; // ✅ store video id on the row
     tr.dataset.link = link;   // <-- add this so we can read the hash later
@@ -121,9 +114,10 @@ export function renderTable(rows){
       cell('col-play', 'thPlay', 'Play', playButton)
     ].join('');
 
-    // (keep hover preview events)
-    tr.addEventListener('mousemove', (e)=> showHover(e, vid, notion, person));
-    tr.addEventListener('mouseleave', hideHover);
+    // Hover data stored on row for delegated listeners
+    tr.dataset.vid = vid;
+    tr.dataset.notion = notion;
+    tr.dataset.person = person;
 
     tbody.appendChild(tr);
   });
@@ -147,7 +141,7 @@ function renderKeywords(str){
 }
 
 function preferredNotion(row) {
-  const pref = (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
+  const pref = getPrefLang();
   if (pref) {
     const key = `Notion_${pref}`;
     if (row[key] && row[key].trim()) return row[key].trim();
@@ -158,7 +152,7 @@ function preferredNotion(row) {
 
 function notionLabel(row) {
   const orig = (row['Notion'] || '').trim();
-  const pref = (localStorage.getItem('pg_pref_lang') || '').toLowerCase();
+  const pref = getPrefLang();
   const key = pref ? `Notion_${pref}` : '';
   const txt = preferredNotion(row);
   const translated = key && row[key] && row[key].trim() && row[key].trim() !== orig;
@@ -169,19 +163,38 @@ function notionLabel(row) {
 
 
 
-/* Hover preview (module-local) */
+/* Hover preview (module-local, RAF-throttled) */
 const hoverCard = $('#hoverCard'); const hoverImg = $('#hoverImg'); const hoverMeta = $('#hoverMeta');
 let hoverId='';
+let hoverRafPending = false;
+let hoverCachedW = 0, hoverCachedH = 0;
+
 function showHover(e, vid, notion, person){
   if(!vid) return hideHover();
-  if(hoverId!==vid){ hoverId=vid; hoverImg.src = vimeoThumbUrl(vid); hoverMeta.textContent = `${notion}${person?' — '+person:''}`; }
-  hoverCard.style.display='block';
-  const pad=16;
-  const x=Math.min(window.innerWidth-hoverCard.offsetWidth-pad, e.clientX+24);
-  const y=Math.min(window.innerHeight-hoverCard.offsetHeight-pad, e.clientY+24);
-  hoverCard.style.left=x+'px'; hoverCard.style.top=y+'px';
+  if(hoverId!==vid){
+    hoverId=vid;
+    hoverImg.src = vimeoThumbUrl(vid);
+    hoverMeta.textContent = `${notion}${person?' — '+person:''}`;
+    hoverCard.style.display='block';
+    hoverCachedW = hoverCard.offsetWidth;
+    hoverCachedH = hoverCard.offsetHeight;
+  }
+  if(hoverCard.style.display==='none'){
+    hoverCard.style.display='block';
+    hoverCachedW = hoverCard.offsetWidth;
+    hoverCachedH = hoverCard.offsetHeight;
+  }
+  if(hoverRafPending) return;
+  hoverRafPending = true;
+  requestAnimationFrame(()=>{
+    hoverRafPending = false;
+    const pad=16;
+    const x=Math.min(window.innerWidth-hoverCachedW-pad, e.clientX+24);
+    const y=Math.min(window.innerHeight-hoverCachedH-pad, e.clientY+24);
+    hoverCard.style.left=x+'px'; hoverCard.style.top=y+'px';
+  });
 }
-function hideHover(){ hoverCard.style.display='none'; }
+function hideHover(){ hoverId=''; hoverCard.style.display='none'; }
 
 export function applyFilters(){
   const q = ($('#search').value || '').trim().toLowerCase();
@@ -235,8 +248,17 @@ export function bindRowInteractions() {
     }
   });
 
-  // Keep your existing search handler (don’t remove it)
-  $('#search').addEventListener('input', applyFilters);
+  // Debounced search — avoids full re-render on every keystroke
+  $('#search').addEventListener('input', debounce(applyFilters, 150));
+
+  // Delegated hover listeners on tbody (instead of per-row)
+  const tbody = $('#videoTable tbody');
+  tbody.addEventListener('mousemove', (e) => {
+    const tr = e.target.closest('tr');
+    if (!tr) return;
+    showHover(e, tr.dataset.vid, tr.dataset.notion, tr.dataset.person);
+  });
+  tbody.addEventListener('mouseleave', hideHover);
 }
 
 

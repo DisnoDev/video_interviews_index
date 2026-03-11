@@ -1,5 +1,5 @@
 // assets/js/transcript.js
-import { $, escapeHtml } from './utils.js';
+import { $, escapeHtml, trapFocus } from './utils.js';
 import { exportSingleTranscriptPdf } from './pdf.js';
 
 const tmodal    = $('#tmodal');
@@ -10,6 +10,7 @@ const tdownload = $('#tdownload');
 const tdownloadPdf = $('#tdownloadPdf');
 
 const DEFAULT_TITLE = 'Transcript';
+let releaseTranscriptTrap = null;
 
 let currentTranscript = {
   id: '',
@@ -104,6 +105,7 @@ export function bindTranscript(){
   document.addEventListener('transcript:open-request', () => {
     applyTranscriptToModal();
     tmodal.classList.add('open');
+    releaseTranscriptTrap = trapFocus(tmodal);
   });
 
   document.addEventListener('transcript:download-request', () => {
@@ -111,8 +113,12 @@ export function bindTranscript(){
   });
 
   // Close
-  tclose.addEventListener('click', () => tmodal.classList.remove('open'));
-  tmodal.addEventListener('click', (e) => { if (e.target === tmodal) tmodal.classList.remove('open'); });
+  function closeTranscript() {
+    if (releaseTranscriptTrap) { releaseTranscriptTrap(); releaseTranscriptTrap = null; }
+    tmodal.classList.remove('open');
+  }
+  tclose.addEventListener('click', closeTranscript);
+  tmodal.addEventListener('click', (e) => { if (e.target === tmodal) closeTranscript(); });
 
   // Download .txt
   if (tdownload) {
@@ -128,8 +134,8 @@ export function bindTranscript(){
   }
 }
 
-// ✅ Optional: allow other modules to close transcript modal
 export function closeTranscriptModal(){
-  const tmodal = document.getElementById('tmodal');
-  if (tmodal) tmodal.classList.remove('open');
+  if (releaseTranscriptTrap) { releaseTranscriptTrap(); releaseTranscriptTrap = null; }
+  const el = document.getElementById('tmodal');
+  if (el) el.classList.remove('open');
 }

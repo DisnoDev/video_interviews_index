@@ -175,6 +175,10 @@ h1 a:focus-visible {
   background-color: transparent; border:0; border-radius:0;
   overflow:auto; position:relative; box-shadow:none; margin-top:24px;
 }
+.loading-indicator{
+  padding:40px 0; text-align:center; color:var(--muted);
+  font-size:clamp(14px, 2vw, 18px);
+}
 
 #videoTable {
   width: 100%;
@@ -387,7 +391,7 @@ body.audio-mode #aoOverlay { display:block; }
    ========================= */
 .audio-inner { width:min(900px, 90vw); display:flex; flex-direction:column; gap:12px; }
 #audioTitle { margin:0; font-size: clamp(16px, 3vw, 24px); line-height:1.2; }
-.audio-txt { flex:1; overflow:auto; font-size: clamp(18px, 3.2vw, 22px); line-height:1.5; letter-spacing:0.2px; padding-right:8px; }
+.audio-txt { flex:1; overflow:auto; font-size: clamp(18px, 3.2vw, 22px); line-height:1.5; letter-spacing:0.2px; padding-right:8px; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; touch-action:pan-y; }
 .audio-txt p { margin: 0 0 0.9em 0; }
 .audio-txt .transcript-chunk,
 .transcript .transcript-chunk {
@@ -605,6 +609,10 @@ p {
 .subtitle-btn.is-pref:not(.active) {
   border-style: dashed;
   opacity: 0.85;
+}
+.subtitle-btn:focus-visible {
+  outline: 2px solid var(--bottom);
+  outline-offset: 2px;
 }
 #modal .player iframe#player {
   position: absolute !important;

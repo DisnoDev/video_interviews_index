@@ -1,10 +1,19 @@
 export const $  = (sel, el=document) => el.querySelector(sel);
 export const $$ = (sel, el=document) => [...el.querySelectorAll(sel)];
 
+export function debounce(fn, ms) {
+  let timer;
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), ms);
+  };
+}
+
 export function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c])); }
 export function escapeAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
 
 export function csvToRows(csv){
+  csv = csv.replace(/^\uFEFF/, '');
   const rows = []; let row = []; let i = 0, field = '', inQuotes = false;
   while (i < csv.length) {
     const c = csv[i];
@@ -57,4 +66,31 @@ export function extractVimeoHash(url){
     const u = new URL(url);
     return u.searchParams.get('h') || '';
   } catch { return ''; }
+}
+
+export function computeLateStart(val) {
+  const norm = String(val || '').trim();
+  if (!norm) return 0;
+  if (/^(1|true|yes)$/i.test(norm)) return 4;
+  const num = Number(norm);
+  return Number.isFinite(num) && num > 0 ? num : 0;
+}
+
+export function trapFocus(container) {
+  const sel = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+  const focusable = container.querySelectorAll(sel);
+  if (!focusable.length) return () => {};
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  function handler(e) {
+    if (e.key !== 'Tab') return;
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }
+  container.addEventListener('keydown', handler);
+  first.focus();
+  return () => container.removeEventListener('keydown', handler);
 }

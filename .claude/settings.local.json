@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(del \"c:\\\\Users\\\\marct\\\\video_interviews_index\\\\assets\\\\js\\\\player.js\")"
+    ]
+  }
+}

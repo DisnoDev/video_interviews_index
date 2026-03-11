@@ -1,14 +1,15 @@
 // assets/js/toolbar.js
 import { $, $$ } from './utils.js';
 import { setCollectionFilter, getCollectionFilter, getCollectionOptions } from './table.js';
+import { getAudioMode, setAudioMode as persistAudioMode, getAudioClicked, setAudioClicked, getTheme, setTheme, getPrefLang, setPrefLang } from './prefs.js';
 
 // --- state -------------------------------------------------
 let autoplayEnabled = false;       // user toggle (session)
 let autoplaySessionActive = false; // set true while modal is open / playing
 
 // Persistent + per-session flags
-let audioMode = (localStorage.getItem('pg_audio_mode') === '1'); // persistent user pref
-let audioClickedThisSession = (sessionStorage.getItem('pg_audio_clicked') === '1'); // new guard
+let audioMode = getAudioMode();
+let audioClickedThisSession = getAudioClicked();
 
 let collectionSelect = null;
 const collectionAliasMap = new Map();
@@ -31,8 +32,8 @@ export function setAudioMode(v) {
   }
 
   // Persist + mark that the user explicitly chose it this session
-  localStorage.setItem('pg_audio_mode', audioMode ? '1' : '0');
-  sessionStorage.setItem('pg_audio_clicked', '1');
+  persistAudioMode(audioMode);
+  setAudioClicked();
   audioClickedThisSession = true;
 
   document.dispatchEvent(new CustomEvent('audio:mode-changed', { detail: { on: audioMode } }));
@@ -56,7 +57,7 @@ export function bindToolbar() {
   // ✅ Reset to video if stuck in audio mode from a previous session
   if (!audioClickedThisSession && audioMode) {
     audioMode = false;
-    localStorage.setItem('pg_audio_mode', '0');
+    persistAudioMode(false);
   }
 
   // Reflect initial state
@@ -83,10 +84,10 @@ export function bindToolbar() {
   // Theme toggle
   const themeToggle = $('#themeToggle');
   if (themeToggle) {
-    if (localStorage.getItem('theme') === 'light') document.body.classList.add('light');
+    if (getTheme() === 'light') document.body.classList.add('light');
     themeToggle.addEventListener('click', () => {
       document.body.classList.toggle('light');
-      localStorage.setItem('theme', document.body.classList.contains('light') ? 'light' : 'dark');
+      setTheme(document.body.classList.contains('light') ? 'light' : 'dark');
     });
   }
 
@@ -101,13 +102,12 @@ export function bindToolbar() {
   // Subtitle language preference selector
   const langSel = $('#langPref');
   if (langSel) {
-    const savedLang = localStorage.getItem('pg_pref_lang');
+    const savedLang = getPrefLang();
     if (savedLang) langSel.value = savedLang;
 
     langSel.addEventListener('change', (e) => {
       const val = (e.target.value || '').trim().toLowerCase();
-      if (val) localStorage.setItem('pg_pref_lang', val);
-      else localStorage.removeItem('pg_pref_lang');
+      setPrefLang(val);
 
       document.dispatchEvent(new CustomEvent('subtitle:pref-changed', {
         detail: { lang: val || null }

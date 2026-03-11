@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>DISNOVATION.ORG — Video Index</title>
   <link rel="stylesheet" href="assets/css/styles.css" />
+  <link rel="preconnect" href="https://player.vimeo.com" />
+  <link rel="preconnect" href="https://vumbnail.com" />
 <!--    <link rel="stylesheet" href="assets/css/pgit_alt.css" />
     <link rel="stylesheet" href="/PGTK/cyberfem.css">
   -->
@@ -38,21 +40,21 @@
           <span class="toggle2" data-i18n="showLabel">Show: </span>
           <!--<span class="toggle" data-col="year">Year</span>
           <span class="toggle" data-col="duration">Duration </span>-->
-          <span class="toggle" data-col="keywords" data-i18n="toggleKeywords">Keywords</span>
-          <span class="toggle" id="exportPdfBtn" aria-pressed="false">&#x21F2; PDF</span>
+          <button class="toggle" type="button" data-col="keywords" data-i18n="toggleKeywords">Keywords</button>
+          <button class="toggle" type="button" id="exportPdfBtn" aria-pressed="false">&#x21F2; PDF</button>
 
 
         </div>
         <div class="right">
-          <input id="search" type="search" placeholder="Search… (concept, person, keywords, …)" data-i18n-placeholder="searchPlaceholder" />
-          <select id="collectionFilter" class="pill">
+          <input id="search" type="search" aria-label="Search interviews" placeholder="Search… (concept, person, keywords, …)" data-i18n-placeholder="searchPlaceholder" />
+          <select id="collectionFilter" class="pill" aria-label="Filter by collection">
             <option value="">All collections</option>
             <option value="Post Growth Toolkit">Post Growth Toolkit</option>
             <option value="Radical Ecological Shifts">Radical Ecological Shifts</option>
           </select>
           <!-- <span id="count" class="pill">0 items</span>
           <span class="toggle" id="toggleAutoplay" aria-pressed="false">Autoplay</span> -->
-          <select id="langPref" class="pill">
+          <select id="langPref" class="pill" aria-label="Subtitle language preference">
             <option value="" data-i18n="langAuto">&#128483; auto</option>
             <option value="en">English</option>
             <option value="fr">Français</option>
@@ -64,7 +66,7 @@
             <option value="pt">Português</option>
             <option value="cn">中文</option>
           </select>
-          <span class="toggle" id="toggleAudioMode" aria-pressed="false" title="Audio-only mode" data-i18n="toggleAudioMode" data-i18n-title="audioOnlyMode">&#x1F4FB; mode</span>
+          <button class="toggle" type="button" id="toggleAudioMode" aria-pressed="false" title="Audio-only mode" data-i18n="toggleAudioMode" data-i18n-title="audioOnlyMode">&#x1F4FB; mode</button>
           <button id="themeToggle" class="pill">☾ / ☼</button>
           
 
@@ -73,6 +75,7 @@
     </div>
 
     <div class="table-wrap">
+      <div id="loadingIndicator" class="loading-indicator" data-i18n="loadingText" aria-live="polite">Loading interviews...</div>
       <table id="videoTable">
         <thead>
           <tr>

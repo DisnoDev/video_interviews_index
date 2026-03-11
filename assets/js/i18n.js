@@ -1,3 +1,4 @@
+import { getPrefLang } from './prefs.js';
 const DEFAULT_LANG = 'en';
 
 const TRANSLATIONS = {
@@ -341,12 +342,7 @@ document.addEventListener('i18n:refresh', (event) => {
 });
 
 function getSavedLanguage() {
-  try {
-    return localStorage.getItem('pg_pref_lang');
-  } catch (err) {
-    console.warn('Unable to access localStorage for language preference.', err);
-    return null;
-  }
+  return getPrefLang() || null;
 }
 
 export function initI18n() {
@@ -355,7 +351,11 @@ export function initI18n() {
   applyTranslations(initialLang);
 
   document.addEventListener('subtitle:pref-changed', (event) => {
-    const nextLang = event.detail?.lang || DEFAULT_LANG;
-    applyTranslations(nextLang);
+    try {
+      const nextLang = event.detail?.lang || DEFAULT_LANG;
+      applyTranslations(nextLang);
+    } catch (err) {
+      console.warn('subtitle:pref-changed handler failed in i18n', err);
+    }
   });
 }
