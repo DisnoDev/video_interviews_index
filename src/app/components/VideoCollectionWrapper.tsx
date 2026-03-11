@@ -17,7 +17,7 @@ import {
 
 export function VideoCollectionWrapper() {
   const { records, loading, error, retry } = useInterviewData();
-  const [isDarkMode, setIsDarkMode] = usePersistedState(() => getTheme() !== 'light', (value) => setTheme(value ? 'dark' : 'light'), true);
+  const [isDarkMode, setIsDarkMode] = usePersistedState(() => getTheme() !== 'light', (value) => setTheme(value ? 'dark' : 'light'), false);
   const [preferredLanguage, setPreferredLanguageState] = usePersistedState(getPreferredLanguage, setPreferredLanguage, '');
   const [layoutMode, setLayoutModeState] = usePersistedState(() => getLayoutMode() || 'side', setLayoutMode, 'side');
   const [audioMode, setAudioModeState] = usePersistedState(() => {
@@ -36,19 +36,23 @@ export function VideoCollectionWrapper() {
   };
 
   return (
-    <VideoCollection
-      records={records}
-      loading={loading}
-      error={error}
-      retry={retry}
-      isDarkMode={isDarkMode}
-      setIsDarkMode={setIsDarkMode}
-      preferredLanguage={preferredLanguage}
-      setPreferredLanguage={setPreferredLanguageState}
-      audioMode={audioMode}
-      setAudioMode={handleAudioModeChange}
-      layoutMode={layoutMode}
-      setLayoutMode={setLayoutModeState}
-    />
+    <div className={isDarkMode ? 'dark' : ''}>
+      <div className="min-h-screen bg-white dark:bg-black transition-colors duration-300">
+        <VideoCollection
+          records={records}
+          loading={loading}
+          error={error}
+          retry={retry}
+          isDarkMode={isDarkMode}
+          setIsDarkMode={setIsDarkMode}
+          preferredLanguage={preferredLanguage}
+          setPreferredLanguage={setPreferredLanguageState}
+          audioMode={audioMode}
+          setAudioMode={handleAudioModeChange}
+          layoutMode={layoutMode}
+          setLayoutMode={setLayoutModeState}
+        />
+      </div>
+    </div>
   );
 }
